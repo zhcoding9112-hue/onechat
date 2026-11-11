@@ -5,6 +5,7 @@ import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.common.api.ApiResponse;
 import com.guild.checkout.user.AppUser;
 import com.guild.checkout.user.AppUserService;
+import com.guild.checkout.user.UserDisplay;
 import com.guild.checkout.user.UserRole;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,6 +30,8 @@ public class SessionController {
             Long userId,
             String nickname,
             String avatarUrl,
+            /** 昵称头像是否为占位值，运营后台据此提示资料缺失。 */
+            boolean placeholderProfile,
             List<String> roles,
             boolean talent,
             boolean operator) {
@@ -38,10 +41,13 @@ public class SessionController {
     public ApiResponse<CurrentUserView> me() {
         CurrentUser current = CurrentUserHolder.require();
         AppUser user = userService.requireById(current.userId());
+        String rawNickname = user == null ? null : user.getNickname();
+        String rawAvatar = user == null ? null : user.getAvatarUrl();
         return ApiResponse.ok(new CurrentUserView(
                 current.userId(),
-                user == null ? null : user.getNickname(),
-                user == null ? null : user.getAvatarUrl(),
+                UserDisplay.nickname(rawNickname, current.userId()),
+                UserDisplay.avatarUrl(rawAvatar),
+                UserDisplay.isPlaceholderNickname(rawNickname),
                 current.roleSet().stream().map(Enum::name).sorted().toList(),
                 current.hasRole(UserRole.TALENT),
                 current.hasRole(UserRole.OPERATOR)));

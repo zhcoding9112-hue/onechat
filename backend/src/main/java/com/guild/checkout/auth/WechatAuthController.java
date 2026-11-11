@@ -48,6 +48,7 @@ public class WechatAuthController {
 
     private static final String CALLBACK_PATH = "/api/auth/wechat/callback";
     private static final String DENIED_PATH = "/auth/denied";
+    private static final String WECHAT_ONLY_PATH = "/auth/wechat-only";
     private static final String DEFAULT_REDIRECT = "/";
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -71,6 +72,13 @@ public class WechatAuthController {
             HttpServletRequest request) {
 
         String target = safeRedirect(redirect);
+
+        // 非微信内置浏览器：引导去微信打开，不发起授权流程，也不建任何会话或用户。
+        if (!WechatClientDetector.isWechatBrowser(request)) {
+            log.info("非微信内置浏览器访问授权入口，返回引导页");
+            return redirectTo(withRedirect(WECHAT_ONLY_PATH, target));
+        }
+
         HttpSession session = request.getSession(true);
 
         if (session.getAttribute(SESSION_USER_ID) != null) {
