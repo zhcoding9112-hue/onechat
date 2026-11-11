@@ -1,5 +1,6 @@
 package com.guild.checkout.session;
 
+import com.guild.checkout.auth.WechatAuthController;
 import com.guild.checkout.common.api.ApiResponse;
 import com.guild.checkout.common.exception.UnauthenticatedException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,12 +21,10 @@ import java.util.Map;
 @RequestMapping("/api/session")
 public class SessionController {
 
-    static final String USER_ID_KEY = "APP_USER_ID";
-
     @GetMapping("/me")
     public ApiResponse<Map<String, Object>> me(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        Object userId = session == null ? null : session.getAttribute(USER_ID_KEY);
+        Object userId = session == null ? null : session.getAttribute(WechatAuthController.SESSION_USER_ID);
         if (userId == null) {
             throw new UnauthenticatedException();
         }
