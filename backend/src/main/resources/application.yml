@@ -1,5 +1,14 @@
 server:
   port: 8080
+  servlet:
+    session:
+      cookie:
+        name: PCSESSION
+        http-only: true
+        same-site: lax
+        # 生产走 HTTPS 时置为 true，本机 http 调试保持 false 否则 Cookie 不下发。
+        secure: ${SESSION_COOKIE_SECURE:false}
+        path: /
 
 spring:
   application:
@@ -32,6 +41,16 @@ spring:
           max-active: 16
           max-idle: 8
           min-idle: 1
+
+  session:
+    # 会话存 Redis：应用重启不掉线，且为后续多实例留好余地。
+    store-type: redis
+    # 会话有效期。每次访问都会续期（见 SessionConfig 的 flush-mode 说明）。
+    timeout: ${SESSION_TIMEOUT:7d}
+    redis:
+      namespace: private-checkout:session
+      flush-mode: on-save
+      repository-type: default
 
   flyway:
     enabled: true

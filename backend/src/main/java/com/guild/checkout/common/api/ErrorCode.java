@@ -23,6 +23,9 @@ public enum ErrorCode {
     /** 资源不存在。 */
     NOT_FOUND("NOT_FOUND", "请求的资源不存在", HttpStatus.NOT_FOUND),
 
+    /** 路由与鉴权已就位，但功能尚未实现。 */
+    NOT_IMPLEMENTED("NOT_IMPLEMENTED", "该功能尚未实现", HttpStatus.NOT_IMPLEMENTED),
+
     /** 兜底的服务端错误。 */
     INTERNAL_ERROR("INTERNAL_ERROR", "服务暂时不可用，请稍后再试", HttpStatus.INTERNAL_SERVER_ERROR);
 

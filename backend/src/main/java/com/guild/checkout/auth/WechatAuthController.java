@@ -34,6 +34,7 @@ import java.util.Base64;
  */
 @RestController
 @RequestMapping("/api/auth/wechat")
+@PublicApi
 public class WechatAuthController {
 
     private static final Logger log = LoggerFactory.getLogger(WechatAuthController.class);

@@ -1,5 +1,6 @@
 package com.guild.checkout.common.web;
 
+import com.guild.checkout.auth.PublicApi;
 import com.guild.checkout.common.exception.ForbiddenException;
 import com.guild.checkout.common.exception.UnauthenticatedException;
 import jakarta.validation.Valid;
@@ -10,11 +11,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.guild.checkout.user.AppUserService;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -29,6 +33,10 @@ class GlobalExceptionHandlerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    /** 鉴权拦截器依赖它；本测试只关心异常处理，故给个替身。 */
+    @MockitoBean
+    private AppUserService userService;
 
     @Test
     void 未认证返回401与UNAUTHENTICATED() throws Exception {
@@ -102,6 +110,7 @@ class GlobalExceptionHandlerTest {
 
     @RestController
     @RequestMapping("/__probe")
+    @PublicApi
     static class ProbeController {
 
         @PostMapping("/unauthenticated")

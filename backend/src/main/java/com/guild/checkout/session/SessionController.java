@@ -1,33 +1,49 @@
 package com.guild.checkout.session;
 
-import com.guild.checkout.auth.WechatAuthController;
+import com.guild.checkout.auth.CurrentUser;
+import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.common.api.ApiResponse;
-import com.guild.checkout.common.exception.UnauthenticatedException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import com.guild.checkout.user.AppUser;
+import com.guild.checkout.user.AppUserService;
+import com.guild.checkout.user.UserRole;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import java.util.List;
 
 /**
- * 当前会话查询。
- *
- * 本阶段仅作为「受保护接口」的最小实现，用于打通前端请求封装与未认证处理；
- * 真正的微信授权建立会话、会话续期与角色鉴权见 wechat-auth 相关任务。
+ * 当前会话。未登录由鉴权拦截器统一拦下并返回未认证。
  */
 @RestController
 @RequestMapping("/api/session")
 public class SessionController {
 
+    private final AppUserService userService;
+
+    public SessionController(AppUserService userService) {
+        this.userService = userService;
+    }
+
+    public record CurrentUserView(
+            Long userId,
+            String nickname,
+            String avatarUrl,
+            List<String> roles,
+            boolean talent,
+            boolean operator) {
+    }
+
     @GetMapping("/me")
-    public ApiResponse<Map<String, Object>> me(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        Object userId = session == null ? null : session.getAttribute(WechatAuthController.SESSION_USER_ID);
-        if (userId == null) {
-            throw new UnauthenticatedException();
-        }
-        return ApiResponse.ok(Map.of("userId", userId));
+    public ApiResponse<CurrentUserView> me() {
+        CurrentUser current = CurrentUserHolder.require();
+        AppUser user = userService.requireById(current.userId());
+        return ApiResponse.ok(new CurrentUserView(
+                current.userId(),
+                user == null ? null : user.getNickname(),
+                user == null ? null : user.getAvatarUrl(),
+                current.roleSet().stream().map(Enum::name).sorted().toList(),
+                current.hasRole(UserRole.TALENT),
+                current.hasRole(UserRole.OPERATOR)));
     }
 }
