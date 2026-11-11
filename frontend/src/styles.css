@@ -1,0 +1,30 @@
+:root {
+  --app-max-width: 750px;
+  --app-bg: #f7f8fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  color: #323233;
+  font-size: 14px;
+}
+
+#app {
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+  padding-bottom: env(safe-area-inset-bottom);
+}
