@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '订单详情' },
   },
   {
+    path: '/orders/:id/payment',
+    name: 'order-payment',
+    component: () => import('@/views/OrderPaymentView.vue'),
+    meta: { title: '订单支付' },
+  },
+  {
     // 脚手架自检页，联调用，不在导航中暴露
     path: '/__dev',
     name: 'dev-probe',

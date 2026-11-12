@@ -75,8 +75,8 @@ async function submit() {
       contact: contact.value.trim(),
       remark: remark.value.trim() || undefined,
     })
-    // 下单成功直接进入该订单详情，那里承载支付环节
-    await router.replace(`/orders/${order.id}`)
+    // 下单成功直接进入支付环节，少一次跳转
+    await router.replace(`/orders/${order.id}/payment`)
   } catch (e) {
     // 请求层已弹出提示，这里不重复提示
     if (!(e instanceof ApiError)) showToast('下单失败，请稍后重试')

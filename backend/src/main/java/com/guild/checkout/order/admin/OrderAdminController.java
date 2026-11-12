@@ -12,7 +12,6 @@ import com.guild.checkout.order.ServiceOrderMapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.guild.checkout.user.UserRole;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,11 +49,6 @@ public class OrderAdminController {
             @Size(max = 255, message = "原因不超过 255 字符") String reason) {
     }
 
-    public record ConfirmPaymentRequest(
-            @Min(value = 0, message = "实收金额不得为负") long paidCents,
-            @Size(max = 255, message = "差异说明不超过 255 字符") String note) {
-    }
-
     /** 订单列表，可按状态过滤。 */
     @GetMapping
     public ApiResponse<List<OrderView>> list(@RequestParam(required = false) String status) {
@@ -75,24 +69,8 @@ public class OrderAdminController {
                 .stream().map(o -> assembler.assemble(o, OrderViewAssembler.Viewer.OPERATOR)).toList());
     }
 
-    /**
-     * 确认收款。
-     * 实收与应付不一致时必须填写差异说明，否则拒绝——金额对不上而无人解释，
-     * 月底对账时谁也说不清。
-     */
-    @PutMapping("/{orderId}/confirm-payment")
-    public ApiResponse<OrderView> confirmPayment(@PathVariable long orderId,
-                                                 @Valid @RequestBody ConfirmPaymentRequest req) {
-        Long operatorId = CurrentUserHolder.requireUserId();
-        ServiceOrder existing = orderService.requireOrder(orderId);
-        if (existing.getPayableCents() != null && existing.getPayableCents() != req.paidCents()
-                && (req.note() == null || req.note().isBlank())) {
-            throw new com.guild.checkout.common.exception.BusinessException(
-                    "实收金额与应付金额不一致，请填写差异说明");
-        }
-        ServiceOrder order = orderService.confirmPayment(orderId, req.paidCents(), operatorId, req.note());
-        return ApiResponse.ok(assembler.assemble(order, OrderViewAssembler.Viewer.OPERATOR));
-    }
+    // 确认收款不在这里：它必须经过 PaymentService 走收款事件，才能产生收款记录并保证幂等。
+    // 入口见 PUT /api/admin/payment/{orderId}/confirm。
 
     /** 人工取消。原因必填。 */
     @PutMapping("/{orderId}/cancel")

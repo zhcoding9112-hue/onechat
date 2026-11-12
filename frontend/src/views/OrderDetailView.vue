@@ -136,9 +136,9 @@ function formatTime(value: string | null) {
         type="primary"
         block
         round
-        disabled
+        @click="router.push(`/orders/${order.id}/payment`)"
       >
-        上传支付凭证（支付环节开发中）
+        去付款
       </Button>
       <Button
         v-if="order.actions.includes('RATE')"

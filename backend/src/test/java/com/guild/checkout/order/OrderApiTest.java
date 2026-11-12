@@ -330,17 +330,20 @@ class OrderApiTest {
     void 金额不一致需差异说明() throws Exception {
         long orderId = createOrder(1, "wxid_x", null).get("id").asLong();
 
-        mockMvc.perform(put("/api/admin/orders/" + orderId + "/confirm-payment").session(operator)
+        mockMvc.perform(put("/api/admin/payment/" + orderId + "/confirm").session(operator)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"paidCents\":1400}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("差异说明")));
 
-        mockMvc.perform(put("/api/admin/orders/" + orderId + "/confirm-payment").session(operator)
+        mockMvc.perform(put("/api/admin/payment/" + orderId + "/confirm").session(operator)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"paidCents\":1400,\"note\":\"粉丝少付 1 元，已沟通补足\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("PENDING_ACCEPT"))
-                .andExpect(jsonPath("$.data.paidCents").value(1400));
+                .andExpect(jsonPath("$.data.outcome").value("ACCEPTED"))
+                .andExpect(jsonPath("$.data.status").value("PENDING_ACCEPT"));
+
+        // 实收金额记在订单上，运营视图可见
+        assertThat(orderMapper.selectById(orderId).getPaidCents()).isEqualTo(1400);
     }
 
     @Test
@@ -489,7 +492,7 @@ class OrderApiTest {
 
     private long paidOrder(String contact, String remark) throws Exception {
         long orderId = createOrder(1, contact, remark).get("id").asLong();
-        mockMvc.perform(put("/api/admin/orders/" + orderId + "/confirm-payment").session(operator)
+        mockMvc.perform(put("/api/admin/payment/" + orderId + "/confirm").session(operator)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"paidCents\":1500}"))
                 .andExpect(status().isOk());
         return orderId;
