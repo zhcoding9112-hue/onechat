@@ -1,5 +1,7 @@
 package com.guild.checkout.auth;
 
+import com.guild.checkout.talent.Talent;
+import com.guild.checkout.talent.admin.TalentAdminService;
 import com.guild.checkout.user.AppUser;
 import com.guild.checkout.user.AppUserMapper;
 import com.guild.checkout.user.AppUserService;
@@ -49,6 +51,9 @@ class WechatAuthScenarioTest {
 
     @Autowired
     private AppUserMapper userMapper;
+
+    @Autowired
+    private TalentAdminService talentAdminService;
 
     private MockMvc mockMvc;
 
@@ -174,22 +179,36 @@ class WechatAuthScenarioTest {
         AppUser user = userService.registerOrUpdate("o_grant_" + System.nanoTime(), null, "待授权", null);
         MockHttpSession session = sessionFor(user.getId());
 
-        // 授予前：主播工作台无权限
+        // 关联前：主播工作台无权限
         mockMvc.perform(get("/api/talent/workspace/pending-orders").session(session))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-        userService.grantRole(user.getId(), UserRole.TALENT);
+        // 规格里主播角色是由「关联到一条主播档案」授予的，而不是单独发角色
+        Talent talent = talentAdminService.create("小雨", null, null, 0);
+        talentAdminService.linkUser(talent.getId(), user.getId());
 
-        // 授予后：通过角色守卫（落到尚未实现的方法体，说明挡人的不再是角色）
+        // 关联后：主播工作台可用
         mockMvc.perform(get("/api/talent/workspace/pending-orders").session(session))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
 
         // 粉丝身份态仍然可用
         mockMvc.perform(get("/api/session/me").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.roles", org.hamcrest.Matchers.hasItem("FAN")))
                 .andExpect(jsonPath("$.data.talent").value(true));
+    }
+
+    @Test
+    @DisplayName("只有主播角色但未关联档案时，工作台仍无权限")
+    void 有角色无档案时工作台不可用() throws Exception {
+        AppUser user = userService.registerOrUpdate("o_norole_" + System.nanoTime(), null, "孤儿角色", null);
+        userService.grantRole(user.getId(), UserRole.TALENT);
+
+        mockMvc.perform(get("/api/talent/workspace/pending-orders").session(sessionFor(user.getId())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("未关联")));
     }
 
     @Test

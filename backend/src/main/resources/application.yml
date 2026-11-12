@@ -75,6 +75,13 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
+order:
+  deadline:
+    # 待支付有效期与接单时限（分钟）。订单创建时折算成绝对时间戳写入订单，
+    # 调整只影响之后创建的订单，已在计时中的订单沿用创建时的时限。
+    pay-minutes: ${ORDER_PAY_MINUTES:30}
+    accept-minutes: ${ORDER_ACCEPT_MINUTES:15}
+
 storage:
   # 本地存储根目录。上线接对象存储时换 FileStorage 实现即可，业务侧不动。
   root-dir: ${STORAGE_ROOT:./uploads}

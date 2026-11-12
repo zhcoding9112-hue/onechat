@@ -4,7 +4,11 @@ import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.auth.RequireRole;
 import com.guild.checkout.common.api.ApiResponse;
 import com.guild.checkout.common.exception.ForbiddenException;
-import com.guild.checkout.common.exception.NotImplementedException;
+import com.guild.checkout.order.OrderService;
+import com.guild.checkout.order.OrderStatus;
+import com.guild.checkout.order.OrderView;
+import com.guild.checkout.order.OrderViewAssembler;
+import com.guild.checkout.order.ServiceOrder;
 import com.guild.checkout.user.UserRole;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,10 +29,17 @@ public class TalentWorkspaceController {
 
     private final TalentService talentService;
     private final TalentMapper talentMapper;
+    private final OrderService orderService;
+    private final OrderViewAssembler assembler;
 
-    public TalentWorkspaceController(TalentService talentService, TalentMapper talentMapper) {
+    public TalentWorkspaceController(TalentService talentService,
+                                     TalentMapper talentMapper,
+                                     OrderService orderService,
+                                     OrderViewAssembler assembler) {
         this.talentService = talentService;
         this.talentMapper = talentMapper;
+        this.orderService = orderService;
+        this.assembler = assembler;
     }
 
     /** 当前登录者对应的主播档案。没有档案说明角色与档案不一致，按无权限处理。 */
@@ -76,8 +87,46 @@ public class TalentWorkspaceController {
                 talent.getAudioUrl(), talent.getAudioSeconds());
     }
 
+    // ---------- 订单 ----------
+
+    /** 待接单列表。剩余接单时间由前端按 acceptDeadline 倒计时展示。 */
     @GetMapping("/pending-orders")
-    public ApiResponse<Void> pendingOrders() {
-        throw new NotImplementedException("待接单列表尚未实现");
+    public ApiResponse<java.util.List<OrderView>> pendingOrders() {
+        Talent talent = requireMyTalent();
+        return ApiResponse.ok(orderService.listByTalent(talent.getId(), OrderStatus.PENDING_ACCEPT)
+                .stream().map(o -> assembler.assemble(o, OrderViewAssembler.Viewer.TALENT)).toList());
+    }
+
+    /** 进行中的订单（已接单未完成）。 */
+    @GetMapping("/active-orders")
+    public ApiResponse<java.util.List<OrderView>> activeOrders() {
+        Talent talent = requireMyTalent();
+        return ApiResponse.ok(orderService.listByTalent(talent.getId(), OrderStatus.ACCEPTED)
+                .stream().map(o -> assembler.assemble(o, OrderViewAssembler.Viewer.TALENT)).toList());
+    }
+
+    /** 历史订单：已完成、已超时、已退款。 */
+    @GetMapping("/history-orders")
+    public ApiResponse<java.util.List<OrderView>> historyOrders() {
+        Talent talent = requireMyTalent();
+        return ApiResponse.ok(orderService.listByTalent(talent.getId(),
+                        OrderStatus.COMPLETED, OrderStatus.TIMEOUT, OrderStatus.REFUNDED)
+                .stream().map(o -> assembler.assemble(o, OrderViewAssembler.Viewer.TALENT)).toList());
+    }
+
+    /** 接单。接单后返回的视图带粉丝联系方式与备注。 */
+    @PutMapping("/orders/{orderId}/accept")
+    public ApiResponse<OrderView> accept(@PathVariable long orderId) {
+        Long userId = CurrentUserHolder.requireUserId();
+        ServiceOrder order = orderService.accept(orderId, userId);
+        return ApiResponse.ok(assembler.assemble(order, OrderViewAssembler.Viewer.TALENT));
+    }
+
+    /** 标记服务完成。 */
+    @PutMapping("/orders/{orderId}/complete")
+    public ApiResponse<OrderView> complete(@PathVariable long orderId) {
+        Long userId = CurrentUserHolder.requireUserId();
+        ServiceOrder order = orderService.complete(orderId, userId);
+        return ApiResponse.ok(assembler.assemble(order, OrderViewAssembler.Viewer.TALENT));
     }
 }
