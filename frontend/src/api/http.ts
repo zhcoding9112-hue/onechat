@@ -102,4 +102,8 @@ export const http = {
   get: <T>(url: string, options?: RequestOptions) => request<T>(url, { ...options, method: 'GET' }),
   post: <T>(url: string, body?: unknown, options?: RequestOptions) =>
     request<T>(url, { ...options, method: 'POST', body }),
+  put: <T>(url: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(url, { ...options, method: 'PUT', body }),
+  delete: <T>(url: string, options?: RequestOptions) =>
+    request<T>(url, { ...options, method: 'DELETE' }),
 }
