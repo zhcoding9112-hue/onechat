@@ -26,7 +26,11 @@ function open(id: number) {
 </script>
 
 <template>
-  <NavBar title="陪聊服务" />
+  <NavBar title="陪聊服务">
+    <template #right>
+      <span class="nav-link" @click="router.push('/orders')">我的订单</span>
+    </template>
+  </NavBar>
 
   <div v-if="loading" class="list">
     <Skeleton v-for="i in 3" :key="i" avatar :row="2" class="skeleton" />
@@ -62,6 +66,11 @@ function open(id: number) {
 </template>
 
 <style scoped>
+.nav-link {
+  font-size: 14px;
+  color: #3366ff;
+}
+
 .list {
   padding: 12px;
   display: flex;

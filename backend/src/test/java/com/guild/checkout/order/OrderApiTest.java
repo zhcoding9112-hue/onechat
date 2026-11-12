@@ -113,6 +113,7 @@ class OrderApiTest {
     @Test
     @DisplayName("5.5 联系方式缺失时拒绝创建")
     void 联系方式缺失被拒() throws Exception {
+        long before = countOrders();
         mockMvc.perform(post("/api/orders").session(fan)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"talentId\":" + talentId + ",\"serviceSpecId\":" + specId
@@ -121,7 +122,8 @@ class OrderApiTest {
                 .andExpect(jsonPath("$.code").value("INVALID_PARAM"))
                 .andExpect(jsonPath("$.errors[?(@.field=='contact')]").exists());
 
-        assertThat(countOrders()).isZero();
+        // 比差值而非绝对值：库里可能有其他来源的订单
+        assertThat(countOrders()).isEqualTo(before);
     }
 
     @Test
@@ -435,6 +437,37 @@ class OrderApiTest {
         JsonNode talentView = dataOf(mockMvc.perform(
                 get("/api/orders/" + orderId).session(talentSession)).andReturn());
         assertThat(talentView.get("contact").asText()).isEqualTo("wxid_secret");
+    }
+
+    @Test
+    @DisplayName("同时是运营的粉丝，看自己的订单仍是粉丝视图")
+    void 运营看自己的订单是粉丝视图() throws Exception {
+        // 公会很小，运营本人也会下单。若按角色优先判成运营，
+        // 他自己的订单上「上传凭证」会消失，等于付不了钱。
+        MvcResult result = mockMvc.perform(post("/api/orders").session(operator)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(1, "wxid_op", null)))
+                .andExpect(status().isOk())
+                .andReturn();
+        long orderId = dataOf(result).get("id").asLong();
+
+        JsonNode view = dataOf(mockMvc.perform(
+                get("/api/orders/" + orderId).session(operator)).andReturn());
+
+        assertThat(view.get("actions").toString())
+                .contains("UPLOAD_PROOF")
+                .doesNotContain("CONFIRM_PAYMENT");
+    }
+
+    @Test
+    @DisplayName("运营看他人的订单是运营视图")
+    void 运营看他人订单是运营视图() throws Exception {
+        long orderId = createOrder(1, "wxid_x", null).get("id").asLong();
+
+        JsonNode view = dataOf(mockMvc.perform(
+                get("/api/orders/" + orderId).session(operator)).andReturn());
+
+        assertThat(view.get("actions").toString()).contains("CONFIRM_PAYMENT");
     }
 
     // ---------- 辅助 ----------

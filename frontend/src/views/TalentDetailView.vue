@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   NavBar,
   Empty,
@@ -17,11 +17,17 @@ import { talentApi, type TalentDetail } from '@/api/talent'
 import { formatPrice } from '@/utils/money'
 
 const route = useRoute()
+const router = useRouter()
 const detail = ref<TalentDetail | null>(null)
 const loading = ref(true)
 const failed = ref(false)
 
 const talentId = computed(() => Number(route.params.id))
+
+function order(specId?: number) {
+  const query = specId === undefined ? undefined : { specId: String(specId) }
+  router.push({ path: `/talents/${talentId.value}/order`, query })
+}
 
 onMounted(async () => {
   try {
@@ -90,6 +96,7 @@ onMounted(async () => {
           :title="spec.name"
           :label="spec.durationMinutes ? `${spec.durationMinutes} 分钟` : undefined"
           is-link
+          @click="order(spec.serviceSpecId)"
         >
           <template #value>
             <span class="price">{{ formatPrice(spec.unitPriceCents) }}</span>
@@ -98,7 +105,7 @@ onMounted(async () => {
       </CellGroup>
 
       <div class="actions">
-        <Button type="primary" block round disabled>选择服务下单（下单功能开发中）</Button>
+        <Button type="primary" block round @click="order()">选择服务下单</Button>
       </div>
     </template>
   </template>

@@ -14,6 +14,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '主播详情' },
   },
   {
+    path: '/talents/:id/order',
+    name: 'order-create',
+    component: () => import('@/views/OrderCreateView.vue'),
+    meta: { title: '确认下单' },
+  },
+  {
+    path: '/orders',
+    name: 'order-list',
+    component: () => import('@/views/OrderListView.vue'),
+    meta: { title: '我的订单' },
+  },
+  {
+    path: '/orders/:id',
+    name: 'order-detail',
+    component: () => import('@/views/OrderDetailView.vue'),
+    meta: { title: '订单详情' },
+  },
+  {
     // 脚手架自检页，联调用，不在导航中暴露
     path: '/__dev',
     name: 'dev-probe',

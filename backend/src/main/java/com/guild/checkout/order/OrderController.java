@@ -115,14 +115,24 @@ public class OrderController {
             java.time.LocalDateTime occurredAt) {
     }
 
-    /** 判定查看者身份：运营 > 该单主播 > 粉丝。 */
+    /**
+     * 判定查看者身份：先看与这笔订单的关系，都不是才按运营看。
+     *
+     * 顺序不能反过来。公会很小，运营本人也会下单，若运营优先，他看自己的订单时
+     * 拿到的是运营操作，「上传凭证」反而消失，自己的单反而付不了钱；
+     * 而且运营也不该对自己的订单执行确认收款。
+     */
     private OrderViewAssembler.Viewer viewerOf(ServiceOrder order, CurrentUser current) {
-        if (current.hasRole(UserRole.OPERATOR)) {
-            return OrderViewAssembler.Viewer.OPERATOR;
+        if (orderService.isFan(order, current.userId())) {
+            return OrderViewAssembler.Viewer.FAN;
         }
         if (orderService.isOwningTalent(order, current.userId())) {
             return OrderViewAssembler.Viewer.TALENT;
         }
+        if (current.hasRole(UserRole.OPERATOR)) {
+            return OrderViewAssembler.Viewer.OPERATOR;
+        }
+        // 走到这里说明归属校验有漏，保守按粉丝视图（字段最少）
         return OrderViewAssembler.Viewer.FAN;
     }
 }
