@@ -6,8 +6,11 @@ import com.guild.checkout.common.exception.ForbiddenException;
 import com.guild.checkout.common.exception.NotFoundException;
 import com.guild.checkout.pricing.PriceQuote;
 import com.guild.checkout.pricing.PricingService;
+import com.guild.checkout.order.timeout.DelayQueue;
+import com.guild.checkout.order.timeout.OrderNotifier;
 import com.guild.checkout.talent.Talent;
 import com.guild.checkout.talent.TalentService;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -40,20 +43,29 @@ public class OrderService {
     private final OrderRefGenerator refGenerator;
     private final PricingService pricingService;
     private final TalentService talentService;
-    private final OrderDeadlineProperties deadlines;
+    private final OrderDeadlineProvider deadlines;
+    private final DelayQueue payQueue;
+    private final DelayQueue acceptQueue;
+    private final OrderNotifier notifier;
 
     public OrderService(ServiceOrderMapper orderMapper,
                         OrderStateService stateService,
                         OrderRefGenerator refGenerator,
                         PricingService pricingService,
                         TalentService talentService,
-                        OrderDeadlineProperties deadlines) {
+                        OrderDeadlineProvider deadlines,
+                        @Qualifier("payTimeoutQueue") DelayQueue payQueue,
+                        @Qualifier("acceptTimeoutQueue") DelayQueue acceptQueue,
+                        OrderNotifier notifier) {
         this.orderMapper = orderMapper;
         this.stateService = stateService;
         this.refGenerator = refGenerator;
         this.pricingService = pricingService;
         this.talentService = talentService;
         this.deadlines = deadlines;
+        this.payQueue = payQueue;
+        this.acceptQueue = acceptQueue;
+        this.notifier = notifier;
     }
 
     // ---------- 创建 ----------
@@ -102,6 +114,7 @@ public class OrderService {
 
         insertWithUniqueRef(order);
         stateService.recordCreation(order, command.fanUserId());
+        payQueue.schedule(order.getId(), order.getPayDeadline());
         log.info("订单 {} 已创建，粉丝 {} 指定主播 {}，应付 {} 分",
                 order.getOrderRef(), command.fanUserId(), quote.talentId(), quote.payableCents());
         return order;
@@ -129,13 +142,18 @@ public class OrderService {
     @Transactional
     public ServiceOrder confirmPayment(long orderId, long paidCents, Long operatorId, String note) {
         ServiceOrder order = requireOrder(orderId);
-        return stateService.transition(order, OrderStatus.PENDING_ACCEPT,
+        ServiceOrder paid = stateService.transition(order, OrderStatus.PENDING_ACCEPT,
                 OrderOperatorType.OPERATOR, operatorId, note, o -> {
                     o.setPaidCents(paidCents);
                     o.setPaidAt(LocalDateTime.now());
                     // 接单时限从确认收款这一刻起算
                     o.setAcceptDeadline(LocalDateTime.now().plusMinutes(deadlines.acceptMinutes()));
                 });
+        // 钱已到账，不再需要待支付超时；改为盯接单超时
+        payQueue.cancel(orderId);
+        acceptQueue.schedule(orderId, paid.getAcceptDeadline());
+        notifier.notifyPendingAccept(paid);
+        return paid;
     }
 
     /** 主播接单。只有该订单指定的主播本人可以接。 */
@@ -148,9 +166,11 @@ public class OrderService {
         if (deadline != null && LocalDateTime.now().isAfter(deadline)) {
             throw new BusinessException("该订单已超过接单时限");
         }
-        return stateService.transition(order, OrderStatus.ACCEPTED,
+        ServiceOrder accepted = stateService.transition(order, OrderStatus.ACCEPTED,
                 OrderOperatorType.TALENT, talentUserId, null,
                 o -> o.setAcceptedAt(LocalDateTime.now()));
+        acceptQueue.cancel(orderId);
+        return accepted;
     }
 
     /** 主播标记服务完成。 */
@@ -171,8 +191,10 @@ public class OrderService {
             throw new BusinessException("取消原因为必填");
         }
         ServiceOrder order = requireOrder(orderId);
-        return stateService.transition(order, OrderStatus.CANCELLED,
+        ServiceOrder cancelled = stateService.transition(order, OrderStatus.CANCELLED,
                 OrderOperatorType.OPERATOR, operatorId, reason.trim(), null);
+        dequeue(orderId);
+        return cancelled;
     }
 
     /** 运营标记已退款。重复标记不产生第二条记录。 */
@@ -186,8 +208,16 @@ public class OrderService {
         if (order.statusEnum() == OrderStatus.REFUNDED) {
             return order;
         }
-        return stateService.transition(order, OrderStatus.REFUNDED,
+        ServiceOrder refunded = stateService.transition(order, OrderStatus.REFUNDED,
                 OrderOperatorType.OPERATOR, operatorId, reason.trim(), null);
+        dequeue(orderId);
+        return refunded;
+    }
+
+    /** 订单离开等待态时把它从两条队列里摘掉，避免堆积无效成员。 */
+    private void dequeue(long orderId) {
+        payQueue.cancel(orderId);
+        acceptQueue.cancel(orderId);
     }
 
     // ---------- 查询 ----------

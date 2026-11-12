@@ -3,6 +3,8 @@ package com.guild.checkout.order.admin;
 import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.auth.RequireRole;
 import com.guild.checkout.common.api.ApiResponse;
+import com.guild.checkout.order.OrderDeadlineProvider;
+import com.guild.checkout.order.OrderDeadlineSetting;
 import com.guild.checkout.order.OrderService;
 import com.guild.checkout.order.OrderStatus;
 import com.guild.checkout.order.OrderView;
@@ -35,13 +37,35 @@ public class OrderAdminController {
     private final OrderService orderService;
     private final OrderViewAssembler assembler;
     private final ServiceOrderMapper orderMapper;
+    private final OrderDeadlineProvider deadlines;
 
     public OrderAdminController(OrderService orderService,
                                 OrderViewAssembler assembler,
-                                ServiceOrderMapper orderMapper) {
+                                ServiceOrderMapper orderMapper,
+                                OrderDeadlineProvider deadlines) {
         this.orderService = orderService;
         this.assembler = assembler;
         this.orderMapper = orderMapper;
+        this.deadlines = deadlines;
+    }
+
+    // ---------- 时限配置 ----------
+
+    public record DeadlineRequest(Integer payMinutes, Integer acceptMinutes) {
+    }
+
+    @GetMapping("/deadlines")
+    public ApiResponse<OrderDeadlineSetting> deadlines() {
+        return ApiResponse.ok(deadlines.current());
+    }
+
+    /**
+     * 调整时限。只影响此后创建的订单——已在计时中的订单在创建时就把时限
+     * 折算成绝对时间戳写进了自身。
+     */
+    @PutMapping("/deadlines")
+    public ApiResponse<OrderDeadlineSetting> updateDeadlines(@RequestBody DeadlineRequest req) {
+        return ApiResponse.ok(deadlines.update(req.payMinutes(), req.acceptMinutes()));
     }
 
     public record ReasonRequest(
