@@ -3,9 +3,22 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    name: 'home',
+    name: 'talent-list',
+    component: () => import('@/views/TalentListView.vue'),
+    meta: { title: '陪聊服务' },
+  },
+  {
+    path: '/talents/:id',
+    name: 'talent-detail',
+    component: () => import('@/views/TalentDetailView.vue'),
+    meta: { title: '主播详情' },
+  },
+  {
+    // 脚手架自检页，联调用，不在导航中暴露
+    path: '/__dev',
+    name: 'dev-probe',
     component: () => import('@/views/HomeView.vue'),
-    meta: { title: '首页' },
+    meta: { title: '自检' },
   },
   {
     path: '/auth/wechat-only',
