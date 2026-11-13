@@ -28,7 +28,7 @@ function open(id: number) {
 <template>
   <NavBar title="陪聊服务">
     <template #right>
-      <span class="nav-link" @click="router.push('/orders')">我的订单</span>
+      <span class="nav-link" @click="router.push('/me')">我的</span>
     </template>
   </NavBar>
 

@@ -57,6 +57,38 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '需要微信授权' },
   },
   {
+    path: '/me',
+    name: 'profile',
+    component: () => import('@/views/ProfileView.vue'),
+    meta: { title: '我的' },
+  },
+  {
+    // 主播工作台是同一工程里的一个身份态，不是独立应用。
+    // 接口鉴权在服务端，前端不做角色判断——前端判断挡不住任何人。
+    path: '/talent',
+    component: () => import('@/talent/TalentLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'talent-orders',
+        component: () => import('@/talent/views/TalentOrdersView.vue'),
+        meta: { title: '主播工作台' },
+      },
+      {
+        path: 'income',
+        name: 'talent-income',
+        component: () => import('@/talent/views/TalentIncomeView.vue'),
+        meta: { title: '我的收入' },
+      },
+      {
+        path: 'me',
+        name: 'talent-me',
+        component: () => import('@/talent/views/TalentMeView.vue'),
+        meta: { title: '主播资料' },
+      },
+    ],
+  },
+  {
     // 运营后台与粉丝端同属一个工程，只是不同的路由分支。
     // 接口鉴权在服务端，前端这里不做角色判断——前端判断挡不住任何人。
     path: '/admin',

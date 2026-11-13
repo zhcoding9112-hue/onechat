@@ -9,6 +9,10 @@ import com.guild.checkout.order.OrderStatus;
 import com.guild.checkout.order.OrderView;
 import com.guild.checkout.order.OrderViewAssembler;
 import com.guild.checkout.order.ServiceOrder;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import com.guild.checkout.user.UserRole;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -128,5 +132,65 @@ public class TalentWorkspaceController {
         Long userId = CurrentUserHolder.requireUserId();
         ServiceOrder order = orderService.complete(orderId, userId);
         return ApiResponse.ok(assembler.assemble(order, OrderViewAssembler.Viewer.TALENT));
+    }
+
+    // ---------- 收入 ----------
+
+    /**
+     * 主播收入。
+     *
+     * 刻意只有查询，没有任何写操作：分成是站内记账，实际支付走既有的线下月结，
+     * 系统不提供提现、打款或结算状态变更（settlement 规格明确要求）。
+     *
+     * @param entries 逐笔明细，按时间倒序
+     */
+    public record IncomeView(
+            long totalCents,
+            long completedOrderCount,
+            Map<String, Long> monthlyCents,
+            java.util.List<IncomeEntry> entries) {
+    }
+
+    /** 一笔收入明细。金额是订单上的主播应得快照，不随分成配置变动。 */
+    public record IncomeEntry(
+            Long orderId,
+            String orderRef,
+            String serviceItemName,
+            String serviceSpecName,
+            long payableCents,
+            int commissionRateBp,
+            long talentCents,
+            java.time.LocalDateTime completedAt) {
+    }
+
+    @GetMapping("/income")
+    public ApiResponse<IncomeView> income() {
+        Talent talent = requireMyTalent();
+
+        // 只有已完成的订单计入收入；已超时与已退款的不算
+        java.util.List<ServiceOrder> completed =
+                orderService.listByTalent(talent.getId(), OrderStatus.COMPLETED);
+
+        long total = 0;
+        Map<String, Long> monthly = new LinkedHashMap<>();
+        java.util.List<IncomeEntry> entries = new java.util.ArrayList<>();
+
+        for (ServiceOrder o : completed) {
+            long amount = o.getTalentCents() == null ? 0 : o.getTalentCents();
+            total += amount;
+
+            LocalDate day = (o.getCompletedAt() == null ? o.getCreatedAt() : o.getCompletedAt())
+                    .toLocalDate();
+            String month = YearMonth.from(day).toString();
+            monthly.merge(month, amount, Long::sum);
+
+            entries.add(new IncomeEntry(
+                    o.getId(), o.getOrderRef(), o.getServiceItemName(), o.getServiceSpecName(),
+                    o.getPayableCents() == null ? 0 : o.getPayableCents(),
+                    o.getCommissionRateBp() == null ? 0 : o.getCommissionRateBp(),
+                    amount, o.getCompletedAt()));
+        }
+
+        return ApiResponse.ok(new IncomeView(total, completed.size(), monthly, entries));
     }
 }
