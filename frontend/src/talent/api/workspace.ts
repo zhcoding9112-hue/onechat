@@ -24,6 +24,13 @@ export interface IncomeEntry {
   completedAt: string | null
 }
 
+/** 主播只拿得到聚合值，服务端刻意不下发任何可追溯到订单或粉丝的字段。 */
+export interface SurveyAggregate {
+  count: number
+  average: number | null
+  distribution: Record<string, number>
+}
+
 export interface IncomeView {
   totalCents: number
   completedOrderCount: number
@@ -42,6 +49,7 @@ export const workspaceApi = {
   accept: (orderId: number) => http.put<OrderView>(`${BASE}/orders/${orderId}/accept`),
   complete: (orderId: number) => http.put<OrderView>(`${BASE}/orders/${orderId}/complete`),
   income: () => http.get<IncomeView>(`${BASE}/income`),
+  survey: () => http.get<SurveyAggregate>(`${BASE}/survey`),
 }
 
 /**

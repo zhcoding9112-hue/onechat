@@ -119,3 +119,15 @@ export function statusHint(order: OrderView): string {
       return ''
   }
 }
+
+export interface MySurvey {
+  orderId: number
+  score: number
+  createdAt: string
+}
+
+export const surveyApi = {
+  submit: (orderId: number, score: number) =>
+    http.post<MySurvey>(`/api/orders/${orderId}/survey`, { score }),
+  mine: (orderId: number) => http.get<MySurvey | null>(`/api/orders/${orderId}/survey`),
+}

@@ -11,6 +11,7 @@ import com.guild.checkout.order.OrderViewAssembler;
 import com.guild.checkout.order.ServiceOrder;
 import com.guild.checkout.settlement.SettlementEntry;
 import com.guild.checkout.settlement.SettlementEntryMapper;
+import com.guild.checkout.survey.SurveyService;
 import com.guild.checkout.tipping.TipService;
 import java.time.YearMonth;
 import java.util.LinkedHashMap;
@@ -39,19 +40,22 @@ public class TalentWorkspaceController {
     private final OrderViewAssembler assembler;
     private final TipService tipService;
     private final SettlementEntryMapper settlementMapper;
+    private final SurveyService surveyService;
 
     public TalentWorkspaceController(TalentService talentService,
                                      TalentMapper talentMapper,
                                      OrderService orderService,
                                      OrderViewAssembler assembler,
                                      TipService tipService,
-                                     SettlementEntryMapper settlementMapper) {
+                                     SettlementEntryMapper settlementMapper,
+                                     SurveyService surveyService) {
         this.talentService = talentService;
         this.talentMapper = talentMapper;
         this.orderService = orderService;
         this.assembler = assembler;
         this.tipService = tipService;
         this.settlementMapper = settlementMapper;
+        this.surveyService = surveyService;
     }
 
     /** 当前登录者对应的主播档案。没有档案说明角色与档案不一致，按无权限处理。 */
@@ -171,6 +175,20 @@ public class TalentWorkspaceController {
             int commissionRateBp,
             long talentCents,
             java.time.LocalDateTime completedAt) {
+    }
+
+    // ---------- 满意度 ----------
+
+    /**
+     * 我的满意度评分。
+     *
+     * 只给聚合值。不给逐条记录、不给订单号、不给粉丝标识——
+     * 主播若能看出哪位粉丝打了低分，粉丝就不敢如实打分，这份数据也就没用了。
+     */
+    @GetMapping("/survey")
+    public ApiResponse<SurveyService.Aggregate> survey() {
+        Talent talent = requireMyTalent();
+        return ApiResponse.ok(surveyService.aggregateOf(talent.getId()));
     }
 
     // ---------- 打赏 ----------

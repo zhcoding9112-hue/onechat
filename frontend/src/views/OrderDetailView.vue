@@ -12,13 +12,17 @@ import {
   NoticeBar,
   Steps,
   Step,
+  Rate,
+  showToast,
 } from 'vant'
 import {
   orderApi,
+  surveyApi,
   statusHint,
   statusTagType,
   OrderStatus,
   type HistoryEntry,
+  type MySurvey,
   type OrderView,
 } from '@/api/order'
 import { formatPrice } from '@/utils/money'
@@ -30,11 +34,17 @@ const orderId = computed(() => Number(route.params.id))
 const order = ref<OrderView | null>(null)
 const history = ref<HistoryEntry[]>([])
 const loading = ref(true)
+const survey = ref<MySurvey | null>(null)
+const pendingScore = ref(0)
+const rating = ref(false)
 
 onMounted(async () => {
   try {
     order.value = await orderApi.detail(orderId.value)
     history.value = await orderApi.history(orderId.value)
+    if (order.value.actions.includes('RATE')) {
+      survey.value = await surveyApi.mine(orderId.value)
+    }
   } finally {
     loading.value = false
   }
@@ -65,6 +75,20 @@ const isTerminalAbnormal = computed(() =>
     order.value.status === OrderStatus.REFUNDED
   ),
 )
+
+async function submitRating() {
+  if (pendingScore.value < 1) {
+    showToast('请先选择分数')
+    return
+  }
+  rating.value = true
+  try {
+    survey.value = await surveyApi.submit(orderId.value, pendingScore.value)
+    showToast('感谢你的评价')
+  } finally {
+    rating.value = false
+  }
+}
 
 function formatTime(value: string | null) {
   if (!value) return '—'
@@ -140,15 +164,29 @@ function formatTime(value: string | null) {
       >
         去付款
       </Button>
-      <Button
-        v-if="order.actions.includes('RATE')"
-        type="primary"
-        block
-        round
-        disabled
-      >
-        评价本次服务（开发中）
-      </Button>
+      <CellGroup v-if="order.actions.includes('RATE')" inset title="评价本次服务">
+        <template v-if="survey">
+          <Cell title="我的评分">
+            <template #value>
+              <Rate :model-value="survey.score" readonly size="18" />
+            </template>
+          </Cell>
+          <p class="rate-tip">评价不会公开展示，主播只能看到汇总后的平均分。</p>
+        </template>
+        <template v-else>
+          <Cell title="满意度">
+            <template #value>
+              <Rate v-model="pendingScore" size="22" />
+            </template>
+          </Cell>
+          <p class="rate-tip">评价不会公开展示，主播只能看到汇总后的平均分。</p>
+          <div style="padding: 0 16px 14px">
+            <Button type="primary" block round :loading="rating" @click="submitRating">
+              提交评价
+            </Button>
+          </div>
+        </template>
+      </CellGroup>
       <Button
         v-if="order.actions.includes('REORDER')"
         block
@@ -183,6 +221,14 @@ function formatTime(value: string | null) {
 .price {
   color: #ee0a24;
   font-weight: 600;
+}
+
+.rate-tip {
+  margin: 0;
+  padding: 4px 16px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #969799;
 }
 
 .actions {

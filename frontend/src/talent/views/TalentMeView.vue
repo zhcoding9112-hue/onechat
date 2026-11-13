@@ -9,12 +9,15 @@ import {
   Tag,
   Image as VanImage,
   Skeleton,
+  Rate,
+  Progress,
   showToast,
 } from 'vant'
-import { workspaceApi, type MyProfile } from '@/talent/api/workspace'
+import { workspaceApi, type MyProfile, type SurveyAggregate } from '@/talent/api/workspace'
 
 const router = useRouter()
 const profile = ref<MyProfile | null>(null)
+const survey = ref<SurveyAggregate | null>(null)
 const loading = ref(true)
 const switching = ref(false)
 
@@ -22,10 +25,18 @@ onMounted(load)
 
 async function load() {
   try {
-    profile.value = await workspaceApi.me()
+    const [p, s] = await Promise.all([workspaceApi.me(), workspaceApi.survey()])
+    profile.value = p
+    survey.value = s
   } finally {
     loading.value = false
   }
+}
+
+/** 某个分值占总数的百分比，用于分布条。 */
+function percent(score: number): number {
+  if (!survey.value || survey.value.count === 0) return 0
+  return Math.round(((survey.value.distribution[String(score)] ?? 0) / survey.value.count) * 100)
 }
 
 async function toggleOnline(value: boolean) {
@@ -79,6 +90,34 @@ async function toggleOnline(value: boolean) {
       />
     </CellGroup>
 
+    <CellGroup inset title="满意度" style="margin-top: 12px">
+      <template v-if="survey && survey.count > 0">
+        <Cell title="平均分">
+          <template #value>
+            <span class="score">{{ survey.average }}</span>
+            <Rate :model-value="survey.average ?? 0" readonly allow-half size="14" />
+          </template>
+        </Cell>
+        <Cell :title="`共 ${survey.count} 份评价`" />
+        <div class="dist">
+          <div v-for="n in 5" :key="n" class="dist-row">
+            <span class="dist-label">{{ 6 - n }} 分</span>
+            <Progress
+              :percentage="percent(6 - n)"
+              :show-pivot="false"
+              stroke-width="6"
+              style="flex: 1"
+            />
+            <span class="dist-count">{{ survey.distribution[String(6 - n)] ?? 0 }}</span>
+          </div>
+        </div>
+        <p class="footnote" style="margin: 0; padding: 4px 16px 12px">
+          只展示汇总结果。单条评价出自哪一笔订单、哪位粉丝，系统不会告诉任何人。
+        </p>
+      </template>
+      <Cell v-else title="还没有收到评价" :label="'服务完成后粉丝可以评分'" />
+    </CellGroup>
+
     <CellGroup inset title="资料" style="margin-top: 12px">
       <Cell title="简介" :label="profile.intro ?? '未填写'" />
       <Cell
@@ -115,6 +154,37 @@ async function toggleOnline(value: boolean) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.score {
+  margin-right: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ff976a;
+}
+
+.dist {
+  padding: 4px 16px 8px;
+}
+
+.dist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.dist-label {
+  width: 32px;
+  font-size: 12px;
+  color: #969799;
+}
+
+.dist-count {
+  width: 24px;
+  text-align: right;
+  font-size: 12px;
+  color: #969799;
 }
 
 .footnote {
