@@ -293,10 +293,12 @@ class OrderTimeoutScenarioTest {
         deadlines.update(120, 60);
         ServiceOrder after = newOrder();
 
-        // 在途订单的到期时间完全没变。DATETIME(3) 只存到毫秒，比较前统一精度。
-        assertThat(orderMapper.selectById(before.getId()).getPayDeadline()
-                        .truncatedTo(java.time.temporal.ChronoUnit.MILLIS))
-                .isEqualTo(originalDeadline.truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
+        // 在途订单的到期时间完全没变。
+        // DATETIME(3) 对微秒是四舍五入而非截断，所以用容差比较而不是直接相等；
+        // 这里要验的是"没有被改成 120 分钟后"，毫秒级差异无关紧要。
+        assertThat(orderMapper.selectById(before.getId()).getPayDeadline())
+                .isCloseTo(originalDeadline,
+                        org.assertj.core.api.Assertions.within(5, java.time.temporal.ChronoUnit.MILLIS));
         // 新订单按新时限，明显更晚
         assertThat(after.getPayDeadline()).isAfter(originalDeadline.plusMinutes(60));
     }

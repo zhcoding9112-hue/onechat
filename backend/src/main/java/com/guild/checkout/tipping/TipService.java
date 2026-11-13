@@ -9,6 +9,8 @@ import com.guild.checkout.order.OrderRefGenerator;
 import com.guild.checkout.pricing.CommissionCalculator;
 import com.guild.checkout.pricing.CommissionSplit;
 import com.guild.checkout.pricing.PricingService;
+import com.guild.checkout.settlement.SettlementEntry;
+import com.guild.checkout.settlement.SettlementService;
 import com.guild.checkout.talent.Talent;
 import com.guild.checkout.talent.TalentService;
 import org.slf4j.Logger;
@@ -41,19 +43,22 @@ public class TipService {
     private final PricingService pricingService;
     private final TalentService talentService;
     private final OrderDeadlineProvider deadlines;
+    private final SettlementService settlementService;
 
     public TipService(TipRecordMapper tipMapper,
                       TipSettingMapper settingMapper,
                       OrderRefGenerator refGenerator,
                       PricingService pricingService,
                       TalentService talentService,
-                      OrderDeadlineProvider deadlines) {
+                      OrderDeadlineProvider deadlines,
+                      SettlementService settlementService) {
         this.tipMapper = tipMapper;
         this.settingMapper = settingMapper;
         this.refGenerator = refGenerator;
         this.pricingService = pricingService;
         this.talentService = talentService;
         this.deadlines = deadlines;
+        this.settlementService = settlementService;
     }
 
     // ---------- 创建 ----------
@@ -136,6 +141,7 @@ public class TipService {
         if (tipMapper.updateById(tip) == 0) {
             throw new BusinessException("打赏状态已被其他操作变更，请刷新后重试");
         }
+        settlementService.recordTip(tip);
         log.info("打赏 {} 已收款 {} 分，直接计为已完成", tip.getTipRef(), paidCents);
         return tip;
     }
@@ -165,6 +171,7 @@ public class TipService {
         tip.setClosedAt(LocalDateTime.now());
         tip.setCloseReason(reason);
         tipMapper.updateById(tip);
+        settlementService.reverse(SettlementEntry.SOURCE_TIP, tipId, reason);
         return tip;
     }
 

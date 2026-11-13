@@ -9,9 +9,9 @@ import com.guild.checkout.order.OrderStatus;
 import com.guild.checkout.order.OrderView;
 import com.guild.checkout.order.OrderViewAssembler;
 import com.guild.checkout.order.ServiceOrder;
-import com.guild.checkout.tipping.TipRecord;
+import com.guild.checkout.settlement.SettlementEntry;
+import com.guild.checkout.settlement.SettlementEntryMapper;
 import com.guild.checkout.tipping.TipService;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -38,17 +38,20 @@ public class TalentWorkspaceController {
     private final OrderService orderService;
     private final OrderViewAssembler assembler;
     private final TipService tipService;
+    private final SettlementEntryMapper settlementMapper;
 
     public TalentWorkspaceController(TalentService talentService,
                                      TalentMapper talentMapper,
                                      OrderService orderService,
                                      OrderViewAssembler assembler,
-                                     TipService tipService) {
+                                     TipService tipService,
+                                     SettlementEntryMapper settlementMapper) {
         this.talentService = talentService;
         this.talentMapper = talentMapper;
         this.orderService = orderService;
         this.assembler = assembler;
         this.tipService = tipService;
+        this.settlementMapper = settlementMapper;
     }
 
     /** 当前登录者对应的主播档案。没有档案说明角色与档案不一致，按无权限处理。 */
@@ -198,41 +201,40 @@ public class TalentWorkspaceController {
     public ApiResponse<IncomeView> income() {
         Talent talent = requireMyTalent();
 
-        // 只有已完成的订单计入收入；已超时与已退款的不算
-        java.util.List<ServiceOrder> completed =
-                orderService.listByTalent(talent.getId(), OrderStatus.COMPLETED);
+        // 读分账台账而不是回头算订单：台账已把金额快照固定下来，
+        // 且已退款的记录在台账里是"已冲销"，天然不计入。
+        java.util.List<SettlementEntry> entries = settlementMapper.selectList(
+                com.baomidou.mybatisplus.core.toolkit.Wrappers.<SettlementEntry>lambdaQuery()
+                        .eq(SettlementEntry::getTalentId, talent.getId())
+                        .eq(SettlementEntry::getStatus, SettlementEntry.ACTIVE)
+                        .orderByDesc(SettlementEntry::getOccurredAt));
 
-        long total = 0;
-        long tipTotal = 0;
+        long orderCents = 0;
+        long tipCents = 0;
+        int orderCount = 0;
         Map<String, Long> monthly = new LinkedHashMap<>();
-        java.util.List<IncomeEntry> entries = new java.util.ArrayList<>();
+        java.util.List<IncomeEntry> details = new java.util.ArrayList<>();
 
-        // 打赏与服务订单分开计量，但都计入应得合计（settlement 规格要求分别展示并给出合计）
-        for (TipRecord t : tipService.listCompletedByTalent(talent.getId())) {
-            long amount = t.getTalentCents() == null ? 0 : t.getTalentCents();
-            tipTotal += amount;
-            LocalDate day = (t.getPaidAt() == null ? t.getCreatedAt() : t.getPaidAt()).toLocalDate();
-            monthly.merge(YearMonth.from(day).toString(), amount, Long::sum);
-        }
-        total += tipTotal;
-
-        for (ServiceOrder o : completed) {
-            long amount = o.getTalentCents() == null ? 0 : o.getTalentCents();
-            total += amount;
-
-            LocalDate day = (o.getCompletedAt() == null ? o.getCreatedAt() : o.getCompletedAt())
-                    .toLocalDate();
-            String month = YearMonth.from(day).toString();
-            monthly.merge(month, amount, Long::sum);
-
-            entries.add(new IncomeEntry(
-                    o.getId(), o.getOrderRef(), o.getServiceItemName(), o.getServiceSpecName(),
-                    o.getPayableCents() == null ? 0 : o.getPayableCents(),
-                    o.getCommissionRateBp() == null ? 0 : o.getCommissionRateBp(),
-                    amount, o.getCompletedAt()));
+        for (SettlementEntry e : entries) {
+            long amount = e.getTalentCents() == null ? 0 : e.getTalentCents();
+            boolean isOrder = SettlementEntry.SOURCE_ORDER.equals(e.getSourceType());
+            if (isOrder) {
+                orderCents += amount;
+                orderCount++;
+            } else {
+                tipCents += amount;
+            }
+            monthly.merge(YearMonth.from(e.getOccurredAt().toLocalDate()).toString(),
+                    amount, Long::sum);
+            details.add(new IncomeEntry(
+                    e.getSourceId(), e.getSourceRef(),
+                    isOrder ? "服务订单" : "打赏", "",
+                    e.getAmountCents() == null ? 0 : e.getAmountCents(),
+                    e.getCommissionRateBp() == null ? 0 : e.getCommissionRateBp(),
+                    amount, e.getOccurredAt()));
         }
 
         return ApiResponse.ok(new IncomeView(
-                total, total - tipTotal, tipTotal, completed.size(), monthly, entries));
+                orderCents + tipCents, orderCents, tipCents, orderCount, monthly, details));
     }
 }

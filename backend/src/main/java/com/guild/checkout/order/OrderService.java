@@ -5,6 +5,8 @@ import com.guild.checkout.common.exception.BusinessException;
 import com.guild.checkout.common.exception.ForbiddenException;
 import com.guild.checkout.common.exception.NotFoundException;
 import com.guild.checkout.pricing.PriceQuote;
+import com.guild.checkout.settlement.SettlementEntry;
+import com.guild.checkout.settlement.SettlementService;
 import com.guild.checkout.pricing.PricingService;
 import com.guild.checkout.order.timeout.DelayQueue;
 import com.guild.checkout.order.timeout.OrderNotifier;
@@ -47,6 +49,7 @@ public class OrderService {
     private final DelayQueue payQueue;
     private final DelayQueue acceptQueue;
     private final OrderNotifier notifier;
+    private final SettlementService settlementService;
 
     public OrderService(ServiceOrderMapper orderMapper,
                         OrderStateService stateService,
@@ -56,7 +59,8 @@ public class OrderService {
                         OrderDeadlineProvider deadlines,
                         @Qualifier("payTimeoutQueue") DelayQueue payQueue,
                         @Qualifier("acceptTimeoutQueue") DelayQueue acceptQueue,
-                        OrderNotifier notifier) {
+                        OrderNotifier notifier,
+                        SettlementService settlementService) {
         this.orderMapper = orderMapper;
         this.stateService = stateService;
         this.refGenerator = refGenerator;
@@ -66,6 +70,7 @@ public class OrderService {
         this.payQueue = payQueue;
         this.acceptQueue = acceptQueue;
         this.notifier = notifier;
+        this.settlementService = settlementService;
     }
 
     // ---------- 创建 ----------
@@ -179,9 +184,12 @@ public class OrderService {
         ServiceOrder order = requireOrder(orderId);
         requireOwningTalent(order, talentUserId);
 
-        return stateService.transition(order, OrderStatus.COMPLETED,
+        ServiceOrder done = stateService.transition(order, OrderStatus.COMPLETED,
                 OrderOperatorType.TALENT, talentUserId, null,
                 o -> o.setCompletedAt(LocalDateTime.now()));
+        // 订单完成即入账。幂等由台账的唯一索引保证。
+        settlementService.recordOrder(done);
+        return done;
     }
 
     /** 运营人工取消。原因必填。 */
@@ -210,6 +218,8 @@ public class OrderService {
         }
         ServiceOrder refunded = stateService.transition(order, OrderStatus.REFUNDED,
                 OrderOperatorType.OPERATOR, operatorId, reason.trim(), null);
+        // 已退款的订单不计入结算；若已记过账则冲销，不删除以便追溯
+        settlementService.reverse(SettlementEntry.SOURCE_ORDER, orderId, reason.trim());
         dequeue(orderId);
         return refunded;
     }
