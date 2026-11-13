@@ -57,6 +57,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '需要微信授权' },
   },
   {
+    path: '/talents/:id/tip',
+    name: 'tip-create',
+    component: () => import('@/views/TipCreateView.vue'),
+    meta: { title: '打赏' },
+  },
+  {
+    path: '/tips/:id',
+    name: 'tip-detail',
+    component: () => import('@/views/TipDetailView.vue'),
+    meta: { title: '打赏详情' },
+  },
+  {
     path: '/me',
     name: 'profile',
     component: () => import('@/views/ProfileView.vue'),

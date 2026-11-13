@@ -80,6 +80,10 @@ onMounted(async () => {
       background="#fffbe8"
       left-icon="info-o"
     />
+    <!-- 没有可购服务但仍在架时，打赏依然可用 -->
+    <div v-if="!detail.available && detail.unavailableReason === '该主播暂无可购服务'" class="actions">
+      <Button block round @click="router.push(`/talents/${talentId}/tip`)">打赏 TA</Button>
+    </div>
     <NoticeBar
       v-else-if="!detail.online"
       text="该主播当前离线，接单可能较慢"
@@ -106,6 +110,7 @@ onMounted(async () => {
 
       <div class="actions">
         <Button type="primary" block round @click="order()">选择服务下单</Button>
+        <Button block round @click="router.push(`/talents/${talentId}/tip`)">打赏 TA</Button>
       </div>
     </template>
   </template>
@@ -170,5 +175,8 @@ onMounted(async () => {
 
 .actions {
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 </style>

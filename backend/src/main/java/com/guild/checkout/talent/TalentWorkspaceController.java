@@ -9,6 +9,8 @@ import com.guild.checkout.order.OrderStatus;
 import com.guild.checkout.order.OrderView;
 import com.guild.checkout.order.OrderViewAssembler;
 import com.guild.checkout.order.ServiceOrder;
+import com.guild.checkout.tipping.TipRecord;
+import com.guild.checkout.tipping.TipService;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.LinkedHashMap;
@@ -35,15 +37,18 @@ public class TalentWorkspaceController {
     private final TalentMapper talentMapper;
     private final OrderService orderService;
     private final OrderViewAssembler assembler;
+    private final TipService tipService;
 
     public TalentWorkspaceController(TalentService talentService,
                                      TalentMapper talentMapper,
                                      OrderService orderService,
-                                     OrderViewAssembler assembler) {
+                                     OrderViewAssembler assembler,
+                                     TipService tipService) {
         this.talentService = talentService;
         this.talentMapper = talentMapper;
         this.orderService = orderService;
         this.assembler = assembler;
+        this.tipService = tipService;
     }
 
     /** 当前登录者对应的主播档案。没有档案说明角色与档案不一致，按无权限处理。 */
@@ -146,6 +151,8 @@ public class TalentWorkspaceController {
      */
     public record IncomeView(
             long totalCents,
+            long orderCents,
+            long tipCents,
             long completedOrderCount,
             Map<String, Long> monthlyCents,
             java.util.List<IncomeEntry> entries) {
@@ -163,6 +170,30 @@ public class TalentWorkspaceController {
             java.time.LocalDateTime completedAt) {
     }
 
+    // ---------- 打赏 ----------
+
+    /**
+     * 我收到的打赏。留言只在这里出现——其他粉丝浏览主播详情页看不到任何留言。
+     */
+    public record TipEntry(
+            Long id,
+            String tipRef,
+            long amountCents,
+            long talentCents,
+            String message,
+            java.time.LocalDateTime paidAt) {
+    }
+
+    @GetMapping("/tips")
+    public ApiResponse<java.util.List<TipEntry>> tips() {
+        Talent talent = requireMyTalent();
+        return ApiResponse.ok(tipService.listCompletedByTalent(talent.getId()).stream()
+                .map(t -> new TipEntry(
+                        t.getId(), t.getTipRef(), t.getAmountCents(), t.getTalentCents(),
+                        t.getMessage(), t.getPaidAt()))
+                .toList());
+    }
+
     @GetMapping("/income")
     public ApiResponse<IncomeView> income() {
         Talent talent = requireMyTalent();
@@ -172,8 +203,18 @@ public class TalentWorkspaceController {
                 orderService.listByTalent(talent.getId(), OrderStatus.COMPLETED);
 
         long total = 0;
+        long tipTotal = 0;
         Map<String, Long> monthly = new LinkedHashMap<>();
         java.util.List<IncomeEntry> entries = new java.util.ArrayList<>();
+
+        // 打赏与服务订单分开计量，但都计入应得合计（settlement 规格要求分别展示并给出合计）
+        for (TipRecord t : tipService.listCompletedByTalent(talent.getId())) {
+            long amount = t.getTalentCents() == null ? 0 : t.getTalentCents();
+            tipTotal += amount;
+            LocalDate day = (t.getPaidAt() == null ? t.getCreatedAt() : t.getPaidAt()).toLocalDate();
+            monthly.merge(YearMonth.from(day).toString(), amount, Long::sum);
+        }
+        total += tipTotal;
 
         for (ServiceOrder o : completed) {
             long amount = o.getTalentCents() == null ? 0 : o.getTalentCents();
@@ -191,6 +232,7 @@ public class TalentWorkspaceController {
                     amount, o.getCompletedAt()));
         }
 
-        return ApiResponse.ok(new IncomeView(total, completed.size(), monthly, entries));
+        return ApiResponse.ok(new IncomeView(
+                total, total - tipTotal, tipTotal, completed.size(), monthly, entries));
     }
 }
