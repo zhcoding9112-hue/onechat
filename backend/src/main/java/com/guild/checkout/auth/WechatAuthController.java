@@ -1,5 +1,7 @@
 package com.guild.checkout.auth;
 
+import com.guild.checkout.analytics.AnalyticsService;
+import com.guild.checkout.analytics.EventKey;
 import com.guild.checkout.auth.wechat.WechatOAuthClient;
 import com.guild.checkout.auth.wechat.WechatOAuthException;
 import com.guild.checkout.auth.wechat.WechatOAuthProperties;
@@ -56,13 +58,16 @@ public class WechatAuthController {
     private final WechatOAuthClient oauthClient;
     private final WechatOAuthProperties properties;
     private final AppUserService userService;
+    private final AnalyticsService analytics;
 
     public WechatAuthController(WechatOAuthClient oauthClient,
                                 WechatOAuthProperties properties,
-                                AppUserService userService) {
+                                AppUserService userService,
+                                AnalyticsService analytics) {
         this.oauthClient = oauthClient;
         this.properties = properties;
         this.userService = userService;
+        this.analytics = analytics;
     }
 
     /** 发起授权。已登录则直接回到目标页，不再跳微信。 */
@@ -133,6 +138,10 @@ public class WechatAuthController {
         request.getSession(true).setAttribute(SESSION_USER_ID, user.getId());
 
         log.info("授权完成，userId={}", user.getId());
+        // 授权成功即算一次「打开 H5」。同时带上 openId，
+        // 让它与此前的关注事件在查询时归成同一个人。
+        analytics.track(AnalyticsService.Track.of(EventKey.OPEN_H5)
+                .user(user.getId()).openId(user.getOpenId()));
         return redirectTo(target);
     }
 

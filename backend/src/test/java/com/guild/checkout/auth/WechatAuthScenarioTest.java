@@ -281,7 +281,8 @@ class WechatAuthScenarioTest {
 
         userService.grantRole(fan.getId(), UserRole.OPERATOR);
         mockMvc.perform(get("/api/admin/analytics/funnel").session(sessionFor(fan.getId())))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.funnel").isArray());
     }
 
     // ---------- Requirement: 用户基础资料获取 ----------

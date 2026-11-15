@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { NavBar, Empty, Skeleton, Tag, Image as VanImage } from 'vant'
 import AudioPreview from '@/components/AudioPreview.vue'
 import { talentApi, type TalentCard } from '@/api/talent'
+import { ClientEvent, track } from '@/api/analytics'
 
 const router = useRouter()
 const talents = ref<TalentCard[]>([])
@@ -11,6 +12,7 @@ const loading = ref(true)
 const failed = ref(false)
 
 onMounted(async () => {
+  track(ClientEvent.VIEW_TALENT_LIST)
   try {
     talents.value = await talentApi.list()
   } catch {

@@ -8,6 +8,8 @@ import com.guild.checkout.pricing.PriceQuote;
 import com.guild.checkout.settlement.SettlementEntry;
 import com.guild.checkout.settlement.SettlementService;
 import com.guild.checkout.pricing.PricingService;
+import com.guild.checkout.analytics.AnalyticsService;
+import com.guild.checkout.analytics.EventKey;
 import com.guild.checkout.order.timeout.DelayQueue;
 import com.guild.checkout.order.timeout.OrderNotifier;
 import com.guild.checkout.talent.Talent;
@@ -50,6 +52,7 @@ public class OrderService {
     private final DelayQueue acceptQueue;
     private final OrderNotifier notifier;
     private final SettlementService settlementService;
+    private final AnalyticsService analytics;
 
     public OrderService(ServiceOrderMapper orderMapper,
                         OrderStateService stateService,
@@ -60,7 +63,8 @@ public class OrderService {
                         @Qualifier("payTimeoutQueue") DelayQueue payQueue,
                         @Qualifier("acceptTimeoutQueue") DelayQueue acceptQueue,
                         OrderNotifier notifier,
-                        SettlementService settlementService) {
+                        SettlementService settlementService,
+                        AnalyticsService analytics) {
         this.orderMapper = orderMapper;
         this.stateService = stateService;
         this.refGenerator = refGenerator;
@@ -71,6 +75,7 @@ public class OrderService {
         this.acceptQueue = acceptQueue;
         this.notifier = notifier;
         this.settlementService = settlementService;
+        this.analytics = analytics;
     }
 
     // ---------- 创建 ----------
@@ -120,6 +125,11 @@ public class OrderService {
         insertWithUniqueRef(order);
         stateService.recordCreation(order, command.fanUserId());
         payQueue.schedule(order.getId(), order.getPayDeadline());
+        analytics.track(AnalyticsService.Track.of(EventKey.SUBMIT_ORDER)
+                .user(command.fanUserId())
+                .talent(quote.talentId())
+                .serviceItem(quote.serviceItemId())
+                .order(order.getOrderRef()));
         log.info("订单 {} 已创建，粉丝 {} 指定主播 {}，应付 {} 分",
                 order.getOrderRef(), command.fanUserId(), quote.talentId(), quote.payableCents());
         return order;
@@ -158,6 +168,9 @@ public class OrderService {
         payQueue.cancel(orderId);
         acceptQueue.schedule(orderId, paid.getAcceptDeadline());
         notifier.notifyPendingAccept(paid);
+        analytics.track(AnalyticsService.Track.of(EventKey.CONFIRM_PAYMENT)
+                .user(paid.getFanUserId()).talent(paid.getTalentId())
+                .serviceItem(paid.getServiceItemId()).order(paid.getOrderRef()));
         return paid;
     }
 
@@ -175,6 +188,13 @@ public class OrderService {
                 OrderOperatorType.TALENT, talentUserId, null,
                 o -> o.setAcceptedAt(LocalDateTime.now()));
         acceptQueue.cancel(orderId);
+        // 接单率与平均接单时长都从这条事件算，props 里带上等待了多久
+        long waitedSeconds = accepted.getPaidAt() == null ? 0
+                : java.time.Duration.between(accepted.getPaidAt(), accepted.getAcceptedAt()).getSeconds();
+        analytics.track(AnalyticsService.Track.of(EventKey.ACCEPT_ORDER)
+                .user(accepted.getFanUserId()).talent(accepted.getTalentId())
+                .serviceItem(accepted.getServiceItemId()).order(accepted.getOrderRef())
+                .props(java.util.Map.of("waitedSeconds", waitedSeconds)));
         return accepted;
     }
 
@@ -189,6 +209,10 @@ public class OrderService {
                 o -> o.setCompletedAt(LocalDateTime.now()));
         // 订单完成即入账。幂等由台账的唯一索引保证。
         settlementService.recordOrder(done);
+        analytics.track(AnalyticsService.Track.of(EventKey.COMPLETE_ORDER)
+                .user(done.getFanUserId()).talent(done.getTalentId())
+                .serviceItem(done.getServiceItemId()).order(done.getOrderRef()));
+        recordRepurchaseIfAny(done);
         return done;
     }
 
@@ -222,6 +246,27 @@ public class OrderService {
         settlementService.reverse(SettlementEntry.SOURCE_ORDER, orderId, reason.trim());
         dequeue(orderId);
         return refunded;
+    }
+
+    /**
+     * 7 日复购判定。
+     *
+     * 口径：这位粉丝在本单之前 7 天内，是否还有另一笔已完成的订单。
+     * 判定放在完成时而不是下单时——没走到完成的单不算真的复购。
+     */
+    private void recordRepurchaseIfAny(ServiceOrder done) {
+        LocalDateTime since = done.getCompletedAt().minusDays(7);
+        Long earlier = orderMapper.selectCount(Wrappers.<ServiceOrder>lambdaQuery()
+                .eq(ServiceOrder::getFanUserId, done.getFanUserId())
+                .eq(ServiceOrder::getStatus, OrderStatus.COMPLETED.name())
+                .ne(ServiceOrder::getId, done.getId())
+                .ge(ServiceOrder::getCompletedAt, since)
+                .lt(ServiceOrder::getCompletedAt, done.getCompletedAt()));
+        if (earlier != null && earlier > 0) {
+            analytics.track(AnalyticsService.Track.of(EventKey.REPURCHASE_7D)
+                    .user(done.getFanUserId()).talent(done.getTalentId())
+                    .serviceItem(done.getServiceItemId()).order(done.getOrderRef()));
+        }
     }
 
     /** 订单离开等待态时把它从两条队列里摘掉，避免堆积无效成员。 */

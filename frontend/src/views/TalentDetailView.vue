@@ -15,6 +15,7 @@ import {
 import AudioPreview from '@/components/AudioPreview.vue'
 import { talentApi, type TalentDetail } from '@/api/talent'
 import { formatPrice } from '@/utils/money'
+import { ClientEvent, track } from '@/api/analytics'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +26,10 @@ const failed = ref(false)
 const talentId = computed(() => Number(route.params.id))
 
 function order(specId?: number) {
+  track(ClientEvent.CLICK_ORDER, {
+    talentId: talentId.value,
+    serviceItemId: detail.value?.services[0]?.serviceItemId,
+  })
   const query = specId === undefined ? undefined : { specId: String(specId) }
   router.push({ path: `/talents/${talentId.value}/order`, query })
 }
@@ -32,6 +37,10 @@ function order(specId?: number) {
 onMounted(async () => {
   try {
     detail.value = await talentApi.detail(talentId.value)
+    track(ClientEvent.VIEW_TALENT_DETAIL, {
+      talentId: talentId.value,
+      serviceItemId: detail.value.services[0]?.serviceItemId,
+    })
   } catch {
     failed.value = true
   } finally {

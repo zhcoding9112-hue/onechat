@@ -1,5 +1,7 @@
 package com.guild.checkout.payment;
 
+import com.guild.checkout.analytics.AnalyticsService;
+import com.guild.checkout.analytics.EventKey;
 import com.guild.checkout.auth.CurrentUser;
 import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.common.api.ApiResponse;
@@ -42,17 +44,20 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final PaymentProofMapper proofMapper;
     private final FileStorage storage;
+    private final AnalyticsService analytics;
 
     public PaymentController(OrderService orderService,
                              OrderStateService stateService,
                              PaymentService paymentService,
                              PaymentProofMapper proofMapper,
-                             FileStorage storage) {
+                             FileStorage storage,
+                             AnalyticsService analytics) {
         this.orderService = orderService;
         this.stateService = stateService;
         this.paymentService = paymentService;
         this.proofMapper = proofMapper;
         this.storage = storage;
+        this.analytics = analytics;
     }
 
     public record ProviderOption(String code, String displayName) {
@@ -89,6 +94,10 @@ public class PaymentController {
         if (chosen != null) {
             instruction = paymentService.instruct(order, chosen);
         }
+
+        analytics.track(AnalyticsService.Track.of(EventKey.VIEW_PAYMENT_INFO)
+                .user(order.getFanUserId()).talent(order.getTalentId())
+                .serviceItem(order.getServiceItemId()).order(order.getOrderRef()));
 
         return ApiResponse.ok(new PaymentPage(
                 order.getOrderRef(),
@@ -137,6 +146,9 @@ public class PaymentController {
             stateService.transition(order, OrderStatus.PENDING_CONFIRM,
                     OrderOperatorType.FAN, CurrentUserHolder.requireUserId(), "上传支付凭证", null);
         }
+        analytics.track(AnalyticsService.Track.of(EventKey.UPLOAD_PROOF)
+                .user(order.getFanUserId()).talent(order.getTalentId())
+                .serviceItem(order.getServiceItemId()).order(order.getOrderRef()));
         return ApiResponse.ok(new ProofView(proof.getId(), proof.getUrl(), proof.getCreatedAt()));
     }
 

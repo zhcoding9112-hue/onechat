@@ -106,7 +106,13 @@ const routes: RouteRecordRaw[] = [
     path: '/admin',
     component: () => import('@/admin/AdminLayout.vue'),
     children: [
-      { path: '', redirect: '/admin/pricing' },
+      { path: '', redirect: '/admin/dashboard' },
+      {
+        path: 'dashboard',
+        name: 'admin-dashboard',
+        component: () => import('@/admin/views/DashboardView.vue'),
+        meta: { title: '转化看板' },
+      },
       {
         path: 'pricing',
         name: 'admin-pricing',
