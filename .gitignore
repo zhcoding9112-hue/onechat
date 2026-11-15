@@ -28,3 +28,9 @@ uploads/
 backend/src/main/resources/static/
 build/
 backups/
+
+# 覆盖全局 ~/.gitignore_global：该文件为别的项目定制，忽略了 README.md 与 docs，
+# 导致本项目的全部文档长期游离在版本库之外。项目级规则优先级更高，这里显式取回。
+!README.md
+!docs/
+!docs/**
