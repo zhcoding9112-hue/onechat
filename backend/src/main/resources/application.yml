@@ -1,5 +1,9 @@
 server:
   port: 8080
+  # 置于 Nginx 之后时设为 framework，让应用认 X-Forwarded-Proto。
+  # 不设的话应用以为自己在 http 下，Secure Cookie 不下发，会话建不起来。
+  # 默认 none：没有可信代理时认这个头等于让人随便伪造协议。
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:none}
   servlet:
     session:
       cookie:
