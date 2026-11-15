@@ -17,6 +17,48 @@ public class TalentService {
     private final TalentMapper talentMapper;
     private final TalentTagMapper tagMapper;
 
+    private TalentQueryMapper queryMapper;
+
+    /** 由 Spring 注入；用 setter 而非构造参数，避免改动既有构造函数的全部调用点。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setQueryMapper(TalentQueryMapper queryMapper) {
+        this.queryMapper = queryMapper;
+    }
+
+    /** 一页主播及其总数。总数用于前端判断「没有更多」。 */
+    public record TalentPage(List<Talent> items, long total) {
+    }
+
+    /**
+     * 按条件分页取已上架主播。
+     *
+     * 先查 id 再按 id 取实体，而不是一次 join 查全字段：筛选条件里的 EXISTS 子查询
+     * 会让结果行重复，去重后再取实体比在 SQL 里 DISTINCT 全字段更简单可靠。
+     */
+    public TalentPage listListed(String categoryCode, String gender, Integer level, int page, int size) {
+        int safeSize = Math.min(Math.max(size, 1), 50);
+        int safePage = Math.max(page, 0);
+        List<Long> ids = queryMapper.findIds(
+                trimToNull(categoryCode), trimToNull(gender), level, safeSize, safePage * safeSize);
+        long total = queryMapper.countMatching(trimToNull(categoryCode), trimToNull(gender), level);
+        if (ids.isEmpty()) {
+            return new TalentPage(List.of(), total);
+        }
+        Map<Long, Talent> byId = talentMapper.selectBatchIds(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(Talent::getId, t -> t));
+        // 保持 SQL 给出的顺序：selectBatchIds 不保证顺序
+        List<Talent> ordered = ids.stream().map(byId::get).filter(java.util.Objects::nonNull).toList();
+        return new TalentPage(ordered, total);
+    }
+
+    private static String trimToNull(String v) {
+        if (v == null) {
+            return null;
+        }
+        String t = v.trim();
+        return t.isEmpty() ? null : t;
+    }
+
     public TalentService(TalentMapper talentMapper, TalentTagMapper tagMapper) {
         this.talentMapper = talentMapper;
         this.tagMapper = tagMapper;

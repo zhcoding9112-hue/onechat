@@ -5,6 +5,7 @@ import com.guild.checkout.pricing.PricingService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
@@ -49,6 +50,15 @@ public class TalentCatalogController {
             List<String> promoTags) {
     }
 
+    /**
+     * 一页主播。
+     *
+     * 带上 total 而不是只给 hasMore：前端既要判断「没有更多」，
+     * 也要在筛选后告诉粉丝共多少位，两个信息用一个字段表达不了。
+     */
+    public record TalentFeed(List<TalentCard> items, long total, boolean hasMore) {
+    }
+
     public record SpecOption(
             Long serviceSpecId, String code, String name,
             Integer durationMinutes, long unitPriceCents) {
@@ -80,12 +90,19 @@ public class TalentCatalogController {
     // ---------- 列表 ----------
 
     @GetMapping
-    public ApiResponse<List<TalentCard>> list() {
-        List<Talent> talents = talentService.listListed();
+    public ApiResponse<TalentFeed> list(
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String gender,
+            @RequestParam(required = false) Integer level,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        TalentService.TalentPage result = talentService.listListed(category, gender, level, page, size);
+        List<Talent> talents = result.items();
         Map<Long, List<TalentTag>> tagMap = talentService.listTagsByTalents(
                 talents.stream().map(Talent::getId).toList());
 
-        return ApiResponse.ok(talents.stream()
+        List<TalentCard> cards = talents.stream()
                 .map(t -> new TalentCard(
                         t.getId(),
                         t.getNickname(),
@@ -98,7 +115,10 @@ public class TalentCatalogController {
                         t.getAge(),
                         t.getRegion(),
                         promoTags(t)))
-                .toList());
+                .toList();
+
+        int consumed = Math.max(page, 0) * Math.min(Math.max(size, 1), 50) + cards.size();
+        return ApiResponse.ok(new TalentFeed(cards, result.total(), consumed < result.total()));
     }
 
     // ---------- 详情 ----------

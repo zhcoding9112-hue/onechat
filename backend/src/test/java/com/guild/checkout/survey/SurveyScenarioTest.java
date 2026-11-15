@@ -130,7 +130,7 @@ class SurveyScenarioTest {
         // 列表页同样没有
         String list = mockMvc.perform(get("/api/talents").session(otherFan))
                 .andReturn().getResponse().getContentAsString();
-        assertThat(objectMapper.readTree(list).get("data").get(0).has("score")).isFalse();
+        assertThat(objectMapper.readTree(list).get("data").get("items").get(0).has("score")).isFalse();
     }
 
     @Test

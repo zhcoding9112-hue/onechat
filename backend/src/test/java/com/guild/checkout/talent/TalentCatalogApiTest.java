@@ -145,13 +145,10 @@ class TalentCatalogApiTest {
         talentAdminService.replaceTags(first, List.of("温柔"));
         talentAdminService.setListed(first, true);
 
-        JsonNode list = dataOf(mockMvc.perform(get("/api/talents").session(fan)).andReturn());
-        List<Long> ids = new java.util.ArrayList<>();
-        for (JsonNode n : list) {
-            if (n.get("id").asLong() == first || n.get("id").asLong() == second) {
-                ids.add(n.get("id").asLong());
-            }
-        }
+        // 列表已分页，顺序要跨页收集后再比，只看第一页会漏
+        List<Long> ids = allListedIds().stream()
+                .filter(id -> id == first || id == second)
+                .toList();
         assertThat(ids).containsExactly(first, second);
 
         JsonNode card = findInList(first);
@@ -170,7 +167,9 @@ class TalentCatalogApiTest {
         mockMvc.perform(get("/api/talents").session(fan))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.length()").value(0));
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.total").value(0))
+                .andExpect(jsonPath("$.data.hasMore").value(false));
     }
 
     // ---------- 4.4 粉丝端详情 ----------
@@ -444,11 +443,40 @@ class TalentCatalogApiTest {
                 .andExpect(status().isOk());
     }
 
+    /** 跨页收集粉丝端列表的全部主播 id，保持接口给出的顺序。 */
+    private List<Long> allListedIds() throws Exception {
+        List<Long> all = new java.util.ArrayList<>();
+        for (int page = 0; page < 200; page++) {
+            JsonNode data = dataOf(mockMvc.perform(
+                    get("/api/talents?page=" + page + "&size=50").session(fan)).andReturn());
+            for (JsonNode n : data.get("items")) {
+                all.add(n.get("id").asLong());
+            }
+            if (!data.get("hasMore").asBoolean()) {
+                break;
+            }
+        }
+        return all;
+    }
+
+    /**
+     * 在粉丝端列表中查找某位主播。
+     *
+     * 列表自第 2 组起分页，单页上限 50，而开发库里的已上架主播远不止一页，
+     * 所以必须翻页找完，不能只看第一页。
+     */
     private JsonNode findInList(long talentId) throws Exception {
-        JsonNode list = dataOf(mockMvc.perform(get("/api/talents").session(fan)).andReturn());
-        for (JsonNode node : list) {
-            if (node.get("id").asLong() == talentId) {
-                return node;
+        for (int page = 0; page < 200; page++) {
+            JsonNode data = dataOf(mockMvc.perform(
+                    get("/api/talents?page=" + page + "&size=50").session(fan)).andReturn());
+            JsonNode items = data.get("items");
+            for (JsonNode node : items) {
+                if (node.get("id").asLong() == talentId) {
+                    return node;
+                }
+            }
+            if (!data.get("hasMore").asBoolean()) {
+                return null;
             }
         }
         return null;
