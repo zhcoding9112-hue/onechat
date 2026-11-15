@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
@@ -34,7 +36,7 @@ public class WechatOAuthConfig {
     public WechatOAuthClient wechatOAuthClient(WechatOAuthProperties properties, Environment environment) {
         if (properties.configured()) {
             log.info("微信网页授权使用真实实现，appId={}", mask(properties.appId()));
-            RestClient restClient = RestClient.builder()
+            RestClient restClient = restClientBuilder()
                     .requestFactory(clientHttpRequestFactory())
                     .build();
             return new RealWechatOAuthClient(properties, restClient);
@@ -51,6 +53,31 @@ public class WechatOAuthConfig {
                             .formatted(Arrays.toString(environment.getActiveProfiles()), STUB_ALLOWED_PROFILES));
         }
         return new StubWechatOAuthClient();
+    }
+
+    /**
+     * 微信接口专用的 RestClient 构造器。
+     *
+     * 微信 /sns/oauth2/* 的响应体是 JSON，但 Content-Type 标的是 text/plain。
+     * 默认的 Jackson 转换器只认 application/json，于是解析阶段直接抛
+     * "no suitable HttpMessageConverter"，真机授权必然失败。
+     * 这里插一个只服务于本 client 的转换器，把 text/* 也交给 Jackson。
+     *
+     * 该转换器放在列表首位，意味着本 client 读 String 类型的 text/plain 响应也会走
+     * Jackson 并失败——可以接受，因为本 client 只读 JsonNode。不要把它复用到别处。
+     *
+     * 生产与单测必须共用此方法：之前单测全部用 application/json 应答，
+     * 恰好绕过了真实世界唯一的差异，才让这个 bug 一路活到真机。
+     */
+    static RestClient.Builder restClientBuilder() {
+        var converter = new MappingJackson2HttpMessageConverter();
+        converter.setSupportedMediaTypes(List.of(
+                MediaType.APPLICATION_JSON,
+                new MediaType("application", "*+json"),
+                MediaType.TEXT_PLAIN,
+                MediaType.TEXT_HTML));
+        return RestClient.builder()
+                .messageConverters(converters -> converters.add(0, converter));
     }
 
     private static org.springframework.http.client.ClientHttpRequestFactory clientHttpRequestFactory() {

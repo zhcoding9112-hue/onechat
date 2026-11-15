@@ -29,7 +29,9 @@ class RealWechatOAuthClientTest {
 
     @BeforeEach
     void setUp() {
-        builder = RestClient.builder();
+        // 必须与生产共用同一个 builder 配置。此前这里用的是裸 RestClient.builder()，
+        // 加上下面全部以 application/json 应答，恰好绕开了微信真实返回 text/plain 的情况。
+        builder = WechatOAuthConfig.restClientBuilder();
         server = MockRestServiceServer.bindTo(builder).build();
         client = new RealWechatOAuthClient(PROPS, builder.build());
     }
@@ -60,11 +62,11 @@ class RealWechatOAuthClientTest {
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/sns/oauth2/access_token")))
                 .andRespond(withSuccess("""
                         {"access_token":"AT","openid":"oABC123","scope":"snsapi_userinfo","unionid":"uXYZ"}
-                        """, MediaType.APPLICATION_JSON));
+                        """, MediaType.TEXT_PLAIN));
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/sns/userinfo")))
                 .andRespond(withSuccess("""
                         {"openid":"oABC123","nickname":"小张","headimgurl":"https://img/1.png"}
-                        """, MediaType.APPLICATION_JSON));
+                        """, MediaType.TEXT_PLAIN));
 
         WechatUserInfo info = client.exchangeCode("CODE");
 
@@ -76,11 +78,31 @@ class RealWechatOAuthClientTest {
     }
 
     @Test
+    void 微信以applicationjson应答时同样可解析() {
+        // 微信文档未承诺 Content-Type，实测返回 text/plain，但不排除后续改回 application/json。
+        // 转换器必须同时吃下两种，修一种不能破另一种。
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/sns/oauth2/access_token")))
+                .andRespond(withSuccess("""
+                        {"access_token":"AT","openid":"oJSON1","scope":"snsapi_userinfo"}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/sns/userinfo")))
+                .andRespond(withSuccess("""
+                        {"openid":"oJSON1","nickname":"小李"}
+                        """, MediaType.APPLICATION_JSON));
+
+        WechatUserInfo info = client.exchangeCode("CODE");
+
+        assertThat(info.openId()).isEqualTo("oJSON1");
+        assertThat(info.nickname()).isEqualTo("小李");
+        server.verify();
+    }
+
+    @Test
     void 资料接口失败不阻断登录且openid仍可用() {
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/sns/oauth2/access_token")))
                 .andRespond(withSuccess("""
                         {"access_token":"AT","openid":"oABC123","scope":"snsapi_userinfo"}
-                        """, MediaType.APPLICATION_JSON));
+                        """, MediaType.TEXT_PLAIN));
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/sns/userinfo")))
                 .andRespond(withServerError());
 
@@ -96,7 +118,7 @@ class RealWechatOAuthClientTest {
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/sns/oauth2/access_token")))
                 .andRespond(withSuccess("""
                         {"access_token":"AT","openid":"oBASE","scope":"snsapi_base"}
-                        """, MediaType.APPLICATION_JSON));
+                        """, MediaType.TEXT_PLAIN));
 
         WechatUserInfo info = client.exchangeCode("CODE");
 
@@ -111,7 +133,7 @@ class RealWechatOAuthClientTest {
         server.expect(anything())
                 .andRespond(withSuccess("""
                         {"errcode":40029,"errmsg":"invalid code"}
-                        """, MediaType.APPLICATION_JSON));
+                        """, MediaType.TEXT_PLAIN));
 
         assertThatThrownBy(() -> client.exchangeCode("BAD"))
                 .isInstanceOf(WechatOAuthException.class)
@@ -122,7 +144,7 @@ class RealWechatOAuthClientTest {
     @Test
     void 微信未返回openid时抛出异常() {
         server.expect(anything())
-                .andRespond(withSuccess("{\"access_token\":\"AT\"}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"access_token\":\"AT\"}", MediaType.TEXT_PLAIN));
 
         assertThatThrownBy(() -> client.exchangeCode("CODE"))
                 .isInstanceOf(WechatOAuthException.class)
