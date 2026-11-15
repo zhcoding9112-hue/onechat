@@ -82,8 +82,10 @@ class FunnelScenarioTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
         commissionService.setDefault(3000);
         today = LocalDate.now();
-        // 清空事件表，让构造数据集的核算不受既有数据干扰
+        // 指标要按构造数据集手工核算，就必须有确定的基线。
+        // 本类带 @Transactional，这两条清空会随测试回滚，不影响开发库。
         eventMapper.delete(com.baomidou.mybatisplus.core.toolkit.Wrappers.emptyWrapper());
+        orderMapper.delete(com.baomidou.mybatisplus.core.toolkit.Wrappers.emptyWrapper());
 
         AppUser fanUser = newUser("ff_");
         fanId = fanUser.getId();

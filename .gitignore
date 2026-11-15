@@ -25,3 +25,6 @@ application-local.yaml
 *.log
 logs/
 uploads/
+backend/src/main/resources/static/
+build/
+backups/
