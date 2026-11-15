@@ -79,6 +79,15 @@ public class TalentService {
                 .orderByAsc(Talent::getId));
     }
 
+    /** 按 id 批量取主播，返回 id → 实体的映射。调用方自行决定顺序。 */
+    public Map<Long, Talent> findByIds(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return talentMapper.selectBatchIds(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(Talent::getId, t -> t));
+    }
+
     public Talent find(long talentId) {
         return talentMapper.selectById(talentId);
     }

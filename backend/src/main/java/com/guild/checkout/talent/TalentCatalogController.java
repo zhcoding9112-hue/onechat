@@ -25,8 +25,12 @@ public class TalentCatalogController {
 
     private final TalentService talentService;
     private final PricingService pricingService;
+    private final TalentFavoriteService favoriteService;
 
-    public TalentCatalogController(TalentService talentService, PricingService pricingService) {
+    public TalentCatalogController(TalentService talentService,
+                                   PricingService pricingService,
+                                   TalentFavoriteService favoriteService) {
+        this.favoriteService = favoriteService;
         this.talentService = talentService;
         this.pricingService = pricingService;
     }
@@ -84,7 +88,9 @@ public class TalentCatalogController {
             String gender,
             Integer age,
             String region,
-            List<String> promoTags) {
+            List<String> promoTags,
+            /** 当前粉丝是否已收藏该主播。 */
+            boolean favorited) {
     }
 
     // ---------- 列表 ----------
@@ -136,7 +142,8 @@ public class TalentCatalogController {
                     Boolean.TRUE.equals(talent.getOnline()),
                     talent.getAudioUrl(), talent.getAudioSeconds(),
                     false, "该主播暂不可约", List.of(),
-                    talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent)));
+                    talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent),
+                    favorited(talentId)));
         }
 
         List<ItemGroup> services = groupServices(talentId);
@@ -149,7 +156,13 @@ public class TalentCatalogController {
                 Boolean.TRUE.equals(talent.getOnline()),
                 talent.getAudioUrl(), talent.getAudioSeconds(),
                 !services.isEmpty(), reason, services,
-                talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent)));
+                talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent),
+                favorited(talentId)));
+    }
+
+    private boolean favorited(long talentId) {
+        return favoriteService.isFavorited(
+                com.guild.checkout.auth.CurrentUserHolder.requireUserId(), talentId);
     }
 
     /** 两列宣传语压成列表，null 的那条直接不出现——前端只管按序渲染，不必判空。 */

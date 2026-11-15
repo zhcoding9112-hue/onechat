@@ -64,6 +64,21 @@ export interface TalentDetail {
   age: number | null
   region: string | null
   promoTags: string[]
+  /** 当前粉丝是否已收藏。 */
+  favorited: boolean
+}
+
+export interface FavoriteItem {
+  id: number
+  nickname: string
+  coverUrl: string | null
+  online: boolean
+  gender: Gender | null
+  age: number | null
+  region: string | null
+  /** 已下架或无可购服务时为 false，此时不展示下单入口。 */
+  available: boolean
+  unavailableReason: string | null
 }
 
 export const talentApi = {
@@ -77,4 +92,7 @@ export const talentApi = {
     return http.get<TalentFeed>(`/api/talents?${params.toString()}`, options)
   },
   detail: (id: number) => http.get<TalentDetail>(`/api/talents/${id}`),
+  favorite: (id: number) => http.post<{ favorited: boolean }>(`/api/talents/${id}/favorite`),
+  unfavorite: (id: number) => http.delete<{ favorited: boolean }>(`/api/talents/${id}/favorite`),
+  myFavorites: () => http.get<FavoriteItem[]>('/api/me/favorites'),
 }

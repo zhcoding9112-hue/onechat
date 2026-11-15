@@ -33,6 +33,7 @@ onMounted(async () => {
 
     <CellGroup inset style="margin-top: 12px">
       <Cell title="我的订单" is-link @click="router.push('/orders')" />
+      <Cell title="我的收藏" is-link @click="router.push('/me/favorites')" />
     </CellGroup>
 
     <!-- 身份态切换：只有主播角色才看得到 -->

@@ -69,6 +69,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '打赏详情' },
   },
   {
+    path: '/me/favorites',
+    name: 'favorites',
+    component: () => import('@/views/FavoritesView.vue'),
+    meta: { title: '我的收藏' },
+  },
+  {
     path: '/me',
     name: 'profile',
     component: () => import('@/views/ProfileView.vue'),
