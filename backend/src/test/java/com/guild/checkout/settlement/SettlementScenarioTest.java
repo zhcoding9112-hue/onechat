@@ -93,7 +93,7 @@ class SettlementScenarioTest {
         ServiceSpec spec = catalogService.createSpec(item.getId(), "m30", "30分钟", 30, 30);
         specId = spec.getId();
 
-        Talent talent = talentAdminService.create("小雨", null, null, 0);
+        Talent talent = talentAdminService.create(new TalentAdminService.ProfileForm("小雨", null, null, 0, null, null, null, null));
         talentAdminService.setListed(talent.getId(), true);
         talentId = talent.getId();
         priceService.setPrice(talentId, specId, 10000, true);
@@ -245,7 +245,7 @@ class SettlementScenarioTest {
     @Test
     @DisplayName("Scenario: 周期内无数据的主播以零值成行而非缺行")
     void 无数据主播零值成行() {
-        Talent idle = talentAdminService.create("没有单的主播", null, null, 0);
+        Talent idle = talentAdminService.create(new TalentAdminService.ProfileForm("没有单的主播", null, null, 0, null, null, null, null));
 
         var rows = reportService.monthly(period);
         var row = rows.stream().filter(r -> r.talentId().equals(idle.getId()))

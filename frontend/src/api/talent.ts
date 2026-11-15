@@ -1,5 +1,7 @@
 import { http } from './http'
 
+export type Gender = 'FEMALE' | 'MALE'
+
 export interface TalentCard {
   id: number
   nickname: string
@@ -8,6 +10,12 @@ export interface TalentCard {
   online: boolean
   audioUrl: string | null
   audioSeconds: number | null
+  /** 以下为扩展资料，未填写时为 null，前端整项不渲染。 */
+  gender: Gender | null
+  age: number | null
+  region: string | null
+  /** 宣传语标签，0 到 2 条。 */
+  promoTags: string[]
 }
 
 export interface SpecOption {
@@ -37,6 +45,10 @@ export interface TalentDetail {
   available: boolean
   unavailableReason: string | null
   services: ItemGroup[]
+  gender: Gender | null
+  age: number | null
+  region: string | null
+  promoTags: string[]
 }
 
 export const talentApi = {

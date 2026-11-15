@@ -31,6 +31,30 @@ public class TalentAdminService {
     private static final Logger log = LoggerFactory.getLogger(TalentAdminService.class);
 
     private static final int MAX_TAGS = 8;
+    /** 宣传语标签上限。库里是固定两列，这里的校验是为了让超限请求得到明确拒绝而不是被静默截断。 */
+    public static final int MAX_PROMO_TAGS = 2;
+    private static final int MAX_PROMO_TAG_LENGTH = 16;
+    private static final List<String> GENDERS = List.of("FEMALE", "MALE");
+    private static final int MIN_AGE = 1;
+    private static final int MAX_AGE = 120;
+
+    /**
+     * 主播档案的可编辑字段。
+     *
+     * 做成参数对象而不是继续加形参：扩展资料上来就是 5 个字段，再平铺下去
+     * create/update 会变成 9 个同类型形参并排，调用处极易错位。
+     *
+     * 每个字段为 null 表示「本次不修改」；promoTags 传空列表表示「清空」。
+     */
+    public record ProfileForm(String nickname,
+                              String intro,
+                              String coverUrl,
+                              Integer sortOrder,
+                              String gender,
+                              Integer age,
+                              String region,
+                              List<String> promoTags) {
+    }
 
     private final TalentMapper talentMapper;
     private final TalentTagMapper tagMapper;
@@ -48,14 +72,22 @@ public class TalentAdminService {
     }
 
     @Transactional
-    public Talent create(String nickname, String intro, String coverUrl, Integer sortOrder) {
-        requireText(nickname, "昵称");
+    public Talent create(ProfileForm form) {
+        requireText(form.nickname(), "昵称");
+        String gender = normalizeGender(form.gender());
+        validateAge(form.age());
+        List<String> promoTags = normalizePromoTags(form.promoTags());
 
         Talent talent = new Talent();
-        talent.setNickname(nickname.trim());
-        talent.setIntro(trimToNull(intro));
-        talent.setCoverUrl(trimToNull(coverUrl));
-        talent.setSortOrder(sortOrder == null ? 0 : sortOrder);
+        talent.setNickname(form.nickname().trim());
+        talent.setIntro(trimToNull(form.intro()));
+        talent.setCoverUrl(trimToNull(form.coverUrl()));
+        talent.setGender(gender);
+        talent.setAge(form.age());
+        talent.setRegion(trimToNull(form.region()));
+        talent.setPromoTag1(promoTagAt(promoTags, 0));
+        talent.setPromoTag2(promoTagAt(promoTags, 1));
+        talent.setSortOrder(form.sortOrder() == null ? 0 : form.sortOrder());
         talent.setOnline(false);
         // 新建默认不上架：资料与价格配齐之前不该出现在粉丝端。
         talent.setListed(false);
@@ -64,8 +96,12 @@ public class TalentAdminService {
     }
 
     @Transactional
-    public Talent update(long talentId, String nickname, String intro, String coverUrl, Integer sortOrder) {
+    public Talent update(long talentId, ProfileForm form) {
         Talent talent = talentService.require(talentId);
+        String nickname = form.nickname();
+        String intro = form.intro();
+        String coverUrl = form.coverUrl();
+        Integer sortOrder = form.sortOrder();
 
         // MyBatis-Plus 的 updateById 会跳过 null 字段，所以「把简介清空」这类操作
         // 用实体更新是无效的。凡是可以被置空的字段一律走显式 set。
@@ -92,6 +128,30 @@ public class TalentAdminService {
         if (sortOrder != null) {
             talent.setSortOrder(sortOrder);
             update.set(Talent::getSortOrder, sortOrder);
+            changed = true;
+        }
+        if (form.gender() != null) {
+            talent.setGender(normalizeGender(form.gender()));
+            update.set(Talent::getGender, talent.getGender());
+            changed = true;
+        }
+        if (form.age() != null) {
+            validateAge(form.age());
+            talent.setAge(form.age());
+            update.set(Talent::getAge, form.age());
+            changed = true;
+        }
+        if (form.region() != null) {
+            talent.setRegion(trimToNull(form.region()));
+            update.set(Talent::getRegion, talent.getRegion());
+            changed = true;
+        }
+        if (form.promoTags() != null) {
+            List<String> promoTags = normalizePromoTags(form.promoTags());
+            talent.setPromoTag1(promoTagAt(promoTags, 0));
+            talent.setPromoTag2(promoTagAt(promoTags, 1));
+            update.set(Talent::getPromoTag1, talent.getPromoTag1());
+            update.set(Talent::getPromoTag2, talent.getPromoTag2());
             changed = true;
         }
         if (changed) {
@@ -212,6 +272,52 @@ public class TalentAdminService {
         if (value == null || value.isBlank()) {
             throw new BusinessException(field + "不能为空");
         }
+    }
+
+    /** 空串与纯空白按「未填写」处理，统一落成 NULL，避免粉丝端出现空占位。 */
+    private static String normalizeGender(String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            return null;
+        }
+        String upper = trimmed.toUpperCase(java.util.Locale.ROOT);
+        if (!GENDERS.contains(upper)) {
+            throw new BusinessException("性别只能是 FEMALE 或 MALE");
+        }
+        return upper;
+    }
+
+    private static void validateAge(Integer age) {
+        if (age != null && (age < MIN_AGE || age > MAX_AGE)) {
+            throw new BusinessException("年龄需在 %d 到 %d 之间".formatted(MIN_AGE, MAX_AGE));
+        }
+    }
+
+    /**
+     * 宣传语标签：先丢掉空白项再判数量，否则运营多留一个空输入框就会被误判超限。
+     * 系统只校验数量与长度，不校验内容，也不提供任何文案模板。
+     */
+    private static List<String> normalizePromoTags(List<String> tags) {
+        if (tags == null) {
+            return List.of();
+        }
+        List<String> cleaned = tags.stream()
+                .map(TalentAdminService::trimToNull)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (cleaned.size() > MAX_PROMO_TAGS) {
+            throw new BusinessException("宣传语标签最多 %d 个".formatted(MAX_PROMO_TAGS));
+        }
+        for (String tag : cleaned) {
+            if (tag.length() > MAX_PROMO_TAG_LENGTH) {
+                throw new BusinessException("单个宣传语标签不超过 %d 字符".formatted(MAX_PROMO_TAG_LENGTH));
+            }
+        }
+        return cleaned;
+    }
+
+    private static String promoTagAt(List<String> tags, int index) {
+        return index < tags.size() ? tags.get(index) : null;
     }
 
     private static String trimToNull(String value) {

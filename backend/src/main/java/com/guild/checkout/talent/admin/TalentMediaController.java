@@ -80,7 +80,8 @@ public class TalentMediaController {
 
         StoredFile stored = store(file, "talent-cover");
         String previous = talent.getCoverUrl();
-        adminService.update(talentId, null, null, stored.url(), null);
+        adminService.update(talentId, new TalentAdminService.ProfileForm(
+                null, null, stored.url(), null, null, null, null, null));
         deleteByUrl(previous);
 
         return ApiResponse.ok(new UploadResult(stored.url(), stored.sizeBytes(), stored.contentType()));

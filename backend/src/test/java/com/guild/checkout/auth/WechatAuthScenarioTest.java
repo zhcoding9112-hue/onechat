@@ -185,7 +185,7 @@ class WechatAuthScenarioTest {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         // 规格里主播角色是由「关联到一条主播档案」授予的，而不是单独发角色
-        Talent talent = talentAdminService.create("小雨", null, null, 0);
+        Talent talent = talentAdminService.create(new TalentAdminService.ProfileForm("小雨", null, null, 0, null, null, null, null));
         talentAdminService.linkUser(talent.getId(), user.getId());
 
         // 关联后：主播工作台可用

@@ -36,6 +36,7 @@ function go(path: string) {
         @select="go"
       >
         <el-menu-item index="/admin/dashboard">转化看板</el-menu-item>
+        <el-menu-item index="/admin/talents">主播管理</el-menu-item>
         <el-menu-item index="/admin/pricing">服务与价格</el-menu-item>
         <el-menu-item index="/admin/commission">分成比例</el-menu-item>
       </el-menu>

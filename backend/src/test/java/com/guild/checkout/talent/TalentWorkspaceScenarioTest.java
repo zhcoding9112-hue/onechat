@@ -80,7 +80,7 @@ class TalentWorkspaceScenarioTest {
         ServiceSpec spec = catalogService.createSpec(item.getId(), "m30", "30分钟", 30, 30);
         specId = spec.getId();
 
-        Talent talent = talentAdminService.create("小雨", null, null, 0);
+        Talent talent = talentAdminService.create(new TalentAdminService.ProfileForm("小雨", null, null, 0, null, null, null, null));
         talentAdminService.setListed(talent.getId(), true);
         talentId = talent.getId();
         priceService.setPrice(talentId, specId, 1500, true);
@@ -90,7 +90,7 @@ class TalentWorkspaceScenarioTest {
         talentUserId = talentUser.getId();
         talentSession = sessionFor(talentUser);
 
-        Talent other = talentAdminService.create("阿澈", null, null, 0);
+        Talent other = talentAdminService.create(new TalentAdminService.ProfileForm("阿澈", null, null, 0, null, null, null, null));
         talentAdminService.setListed(other.getId(), true);
         AppUser otherUser = newUser("wx_");
         talentAdminService.linkUser(other.getId(), otherUser.getId());

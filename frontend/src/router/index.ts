@@ -114,6 +114,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '转化看板' },
       },
       {
+        path: 'talents',
+        name: 'admin-talents',
+        component: () => import('@/admin/views/TalentView.vue'),
+        meta: { title: '主播管理' },
+      },
+      {
         path: 'pricing',
         name: 'admin-pricing',
         component: () => import('@/admin/views/PricingView.vue'),

@@ -40,7 +40,13 @@ public class TalentCatalogController {
             boolean online,
             /** 有试听片段时才给地址，前端据此决定是否展示播放控件。 */
             String audioUrl,
-            Integer audioSeconds) {
+            Integer audioSeconds,
+            /** 以下为扩展资料，未填写时为 null，前端整项不渲染，不得展示空占位。 */
+            String gender,
+            Integer age,
+            String region,
+            /** 宣传语标签，运营自填，0 到 2 条。 */
+            List<String> promoTags) {
     }
 
     public record SpecOption(
@@ -64,7 +70,11 @@ public class TalentCatalogController {
             boolean available,
             /** 不可约时的提示文案，可约时为 null。 */
             String unavailableReason,
-            List<ItemGroup> services) {
+            List<ItemGroup> services,
+            String gender,
+            Integer age,
+            String region,
+            List<String> promoTags) {
     }
 
     // ---------- 列表 ----------
@@ -83,7 +93,11 @@ public class TalentCatalogController {
                         tagNames(tagMap.get(t.getId())),
                         Boolean.TRUE.equals(t.getOnline()),
                         t.getAudioUrl(),
-                        t.getAudioSeconds()))
+                        t.getAudioSeconds(),
+                        t.getGender(),
+                        t.getAge(),
+                        t.getRegion(),
+                        promoTags(t)))
                 .toList());
     }
 
@@ -101,7 +115,8 @@ public class TalentCatalogController {
                     tagNames(talentService.listTags(talentId)),
                     Boolean.TRUE.equals(talent.getOnline()),
                     talent.getAudioUrl(), talent.getAudioSeconds(),
-                    false, "该主播暂不可约", List.of()));
+                    false, "该主播暂不可约", List.of(),
+                    talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent)));
         }
 
         List<ItemGroup> services = groupServices(talentId);
@@ -113,7 +128,15 @@ public class TalentCatalogController {
                 tagNames(talentService.listTags(talentId)),
                 Boolean.TRUE.equals(talent.getOnline()),
                 talent.getAudioUrl(), talent.getAudioSeconds(),
-                !services.isEmpty(), reason, services));
+                !services.isEmpty(), reason, services,
+                talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent)));
+    }
+
+    /** 两列宣传语压成列表，null 的那条直接不出现——前端只管按序渲染，不必判空。 */
+    private static List<String> promoTags(Talent t) {
+        return java.util.stream.Stream.of(t.getPromoTag1(), t.getPromoTag2())
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     // ---------- 可购服务 ----------

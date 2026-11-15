@@ -39,21 +39,32 @@ public class TalentAdminController {
     public record TalentView(
             Long id, Long userId, String nickname, String coverUrl, String intro,
             String audioUrl, Integer audioSeconds, boolean online, boolean listed,
-            int sortOrder, List<String> tags) {
+            int sortOrder, List<String> tags,
+            String gender, Integer age, String region, List<String> promoTags) {
     }
 
     public record CreateRequest(
             @NotBlank(message = "昵称不能为空") @Size(max = 64, message = "昵称不超过 64 字符") String nickname,
             @Size(max = 500, message = "简介不超过 500 字符") String intro,
             @Size(max = 512) String coverUrl,
-            Integer sortOrder) {
+            Integer sortOrder,
+            @Size(max = 8) String gender,
+            Integer age,
+            @Size(max = 32, message = "地区不超过 32 字符") String region,
+            List<String> promoTags) {
     }
 
     public record UpdateRequest(
             @Size(max = 64, message = "昵称不超过 64 字符") String nickname,
             @Size(max = 500, message = "简介不超过 500 字符") String intro,
             @Size(max = 512) String coverUrl,
-            Integer sortOrder) {
+            Integer sortOrder,
+            @Size(max = 8) String gender,
+            Integer age,
+            @Size(max = 32, message = "地区不超过 32 字符") String region,
+            // 数量上限不用 @Size：超限要的是「最多 2 个」这句业务提示，
+            // 统一在 TalentAdminService 里校验，和长度校验留在同一处。
+            List<String> promoTags) {
     }
 
     public record TagsRequest(List<@Size(max = 32, message = "单个标签不超过 32 字符") String> tags) {
@@ -82,15 +93,18 @@ public class TalentAdminController {
 
     @PostMapping
     public ApiResponse<TalentView> create(@Valid @RequestBody CreateRequest req) {
-        Talent talent = adminService.create(req.nickname(), req.intro(), req.coverUrl(), req.sortOrder());
+        Talent talent = adminService.create(new TalentAdminService.ProfileForm(
+                req.nickname(), req.intro(), req.coverUrl(), req.sortOrder(),
+                req.gender(), req.age(), req.region(), req.promoTags()));
         return ApiResponse.ok(toView(talent, List.of()));
     }
 
     @PutMapping("/{talentId}")
     public ApiResponse<TalentView> update(@PathVariable long talentId,
                                           @Valid @RequestBody UpdateRequest req) {
-        Talent talent = adminService.update(
-                talentId, req.nickname(), req.intro(), req.coverUrl(), req.sortOrder());
+        Talent talent = adminService.update(talentId, new TalentAdminService.ProfileForm(
+                req.nickname(), req.intro(), req.coverUrl(), req.sortOrder(),
+                req.gender(), req.age(), req.region(), req.promoTags()));
         return ApiResponse.ok(toView(talent, talentService.listTags(talentId)));
     }
 
@@ -133,6 +147,9 @@ public class TalentAdminController {
                 t.getAudioUrl(), t.getAudioSeconds(),
                 Boolean.TRUE.equals(t.getOnline()), Boolean.TRUE.equals(t.getListed()),
                 t.getSortOrder() == null ? 0 : t.getSortOrder(),
-                tags == null ? List.of() : tags.stream().map(TalentTag::getName).toList());
+                tags == null ? List.of() : tags.stream().map(TalentTag::getName).toList(),
+                t.getGender(), t.getAge(), t.getRegion(),
+                java.util.stream.Stream.of(t.getPromoTag1(), t.getPromoTag2())
+                        .filter(java.util.Objects::nonNull).toList());
     }
 }

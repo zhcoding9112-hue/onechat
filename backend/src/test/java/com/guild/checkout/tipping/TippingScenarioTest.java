@@ -78,7 +78,7 @@ class TippingScenarioTest {
         ServiceItem item = catalogService.createItem("tip_" + System.nanoTime(), "情感倾听", null, 0);
         ServiceSpec spec = catalogService.createSpec(item.getId(), "m30", "30分钟", 30, 30);
 
-        Talent talent = talentAdminService.create("小雨", null, null, 0);
+        Talent talent = talentAdminService.create(new TalentAdminService.ProfileForm("小雨", null, null, 0, null, null, null, null));
         talentAdminService.setListed(talent.getId(), true);
         talentId = talent.getId();
         priceService.setPrice(talentId, spec.getId(), 1500, true);
@@ -87,7 +87,7 @@ class TippingScenarioTest {
         talentAdminService.linkUser(talentId, talentUser.getId());
         talentSession = sessionFor(talentUser);
 
-        Talent other = talentAdminService.create("阿澈", null, null, 0);
+        Talent other = talentAdminService.create(new TalentAdminService.ProfileForm("阿澈", null, null, 0, null, null, null, null));
         talentAdminService.setListed(other.getId(), true);
         AppUser otherTalentUser = newUser("tipx_");
         talentAdminService.linkUser(other.getId(), otherTalentUser.getId());

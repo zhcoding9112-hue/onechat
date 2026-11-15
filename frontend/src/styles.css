@@ -1,7 +1,79 @@
+/*
+ * 粉丝端设计令牌。
+ *
+ * 唯一的真源：下面 :root 里的 token。页面与组件一律引用 token，不得写死色值。
+ * Vant 的主题变量在本文件末尾统一映射到 token —— 页面大量使用 Vant 组件，
+ * 不做这层映射，「改一处主色全局同步」就只是句空话。
+ */
+
 :root {
+  /* ---------- 品牌色 ---------- */
+  /*
+   * 主色是唯一真源，加深与浅底由它派生（见文件末尾的 @supports）。
+   * 这里先给出等价的静态值作为兜底：老版本微信 WebView 不支持 color-mix，
+   * 没有兜底会让这两个变量直接失效、相关元素变透明。
+   */
+  --c-brand: #4ecdc4; /* 主色：青绿。试听角标、在线态、主按钮 */
+  --c-brand-deep: #2fa89f; /* 主色加深：按下态、主色文字 */
+  --c-brand-soft: #e6f8f6; /* 主色浅底：选中行、弱强调块 */
+
+  /* ---------- 运营位渐变 ---------- */
+  --c-op-pink: #ffd9e4;
+  --c-op-peach: #ffe8d6;
+  --c-op-lilac: #e4dcff;
+  --c-op-sky: #d6f0ff;
+  --g-op-warm: linear-gradient(135deg, var(--c-op-peach), var(--c-op-pink));
+  --g-op-cool: linear-gradient(135deg, var(--c-op-sky), #cdf4ef);
+  --g-op-violet: linear-gradient(135deg, var(--c-op-lilac), #f0e6ff);
+  --g-page: linear-gradient(180deg, #e8f7fb 0%, #f2f1fb 42%, var(--c-bg) 100%);
+
+  /* ---------- 中性色 ---------- */
+  --c-bg: #f5f6f8;
+  --c-surface: #ffffff;
+  --c-border: #eceef1;
+  --c-text: #1f2328; /* 主文字 */
+  --c-text-2: #5c6472; /* 次要文字 */
+  --c-text-3: #9aa2b1; /* 弱化文字、占位 */
+
+  /* ---------- 语义色 ---------- */
+  --c-online: #38c172;
+  --c-offline: #c2c8d2;
+  --c-danger: #e4573d;
+  --c-price: #ff6b35; /* 价格与金额，刻意区别于主色 */
+
+  /* ---------- 圆角 ---------- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* ---------- 间距 ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* ---------- 字阶 ---------- */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+
+  /* ---------- 阴影 ---------- */
+  --sd-card: 0 2px 12px rgba(31, 35, 40, 0.05);
+  --sd-float: 0 6px 20px rgba(31, 35, 40, 0.12);
+
+  /* ---------- 布局 ---------- */
   --app-max-width: 750px;
-  --app-bg: #f7f8fa;
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
+    sans-serif;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -18,13 +90,63 @@ body,
 }
 
 body {
-  background: var(--app-bg);
-  color: #323233;
-  font-size: 14px;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: var(--fs-md);
 }
 
 #app {
   max-width: var(--app-max-width);
   margin: 0 auto;
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 数字一律等宽，避免金额、时长在列表里跳动 */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Vant 主题映射。
+ * 这一段存在的唯一目的，是让上面的 token 成为真正的单一真源：
+ * 页面里的 van-button / van-tag / van-nav-bar 等组件全部跟随 --c-brand 变化。
+ */
+:root {
+  --van-primary-color: var(--c-brand);
+  --van-success-color: var(--c-online);
+  --van-danger-color: var(--c-danger);
+  --van-text-color: var(--c-text);
+  --van-text-color-2: var(--c-text-2);
+  --van-text-color-3: var(--c-text-3);
+  --van-background: var(--c-bg);
+  --van-background-2: var(--c-surface);
+  --van-border-color: var(--c-border);
+  --van-font-size-xs: var(--fs-xs);
+  --van-font-size-sm: var(--fs-sm);
+  --van-font-size-md: var(--fs-md);
+  --van-font-size-lg: var(--fs-lg);
+  --van-radius-sm: var(--r-sm);
+  --van-radius-md: var(--r-md);
+  --van-radius-lg: var(--r-lg);
+  --van-padding-xs: var(--sp-2);
+  --van-padding-sm: var(--sp-3);
+  --van-padding-md: var(--sp-4);
+  --van-padding-lg: var(--sp-6);
+  --van-nav-bar-background: transparent;
+  --van-nav-bar-title-text-color: var(--c-text);
+  --van-cell-background: var(--c-surface);
+  --van-button-primary-background: var(--c-brand);
+  --van-button-primary-border-color: var(--c-brand);
+}
+
+/*
+ * 主色派生。支持 color-mix 的环境下，改 --c-brand 一处即可带动加深与浅底，
+ * 「改一处主色全局同步」才成立；不支持的环境退回上面的静态兜底值，
+ * 此时主色本身仍然全局生效，只是这两个衍生色需要一并手改。
+ */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root {
+    --c-brand-deep: color-mix(in srgb, var(--c-brand) 78%, #000);
+    --c-brand-soft: color-mix(in srgb, var(--c-brand) 14%, #fff);
+  }
 }

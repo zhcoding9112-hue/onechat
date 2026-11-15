@@ -137,11 +137,11 @@ class TalentCatalogApiTest {
     @DisplayName("4.3 列表按运营设定的顺序展示，含封面昵称标签在线状态")
     void 列表按顺序展示() throws Exception {
         long second = createTalent("后面的");
-        talentAdminService.update(second, null, null, null, 20);
+        talentAdminService.update(second, new TalentAdminService.ProfileForm(null, null, null, 20, null, null, null, null));
         talentAdminService.setListed(second, true);
 
         long first = createTalent("前面的");
-        talentAdminService.update(first, null, null, null, 10);
+        talentAdminService.update(first, new TalentAdminService.ProfileForm(null, null, null, 10, null, null, null, null));
         talentAdminService.replaceTags(first, List.of("温柔"));
         talentAdminService.setListed(first, true);
 
@@ -425,7 +425,7 @@ class TalentCatalogApiTest {
                         .session(operator).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new com.guild.checkout.talent.admin.TalentAdminController
-                                        .CreateRequest(nickname, null, null, 0))))
+                                        .CreateRequest(nickname, null, null, 0, null, null, null, null))))
                 .andExpect(status().isOk())
                 .andReturn();
         return dataOf(result).get("id").asLong();

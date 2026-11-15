@@ -90,7 +90,7 @@ class TalentCatalogScenarioTest {
     @DisplayName("Scenario: 查看主播详情 — 价格取自当前生效的价格配置")
     void 查看主播详情() {
         Talent t = listed("小雨", 0);
-        talentAdminService.update(t.getId(), null, "温柔倾听", null, null);
+        talentAdminService.update(t.getId(), new TalentAdminService.ProfileForm(null, "温柔倾听", null, null, null, null, null, null));
         talentAdminService.replaceTags(t.getId(), List.of("温柔", "耐心"));
         priceService.setPrice(t.getId(), spec30.getId(), 1500, true);
 
@@ -175,7 +175,7 @@ class TalentCatalogScenarioTest {
     @Test
     @DisplayName("Scenario: 新建并上架主播 — 立即出现在粉丝端列表")
     void 新建并上架() {
-        Talent t = talentAdminService.create("新人", null, null, 0);
+        Talent t = talentAdminService.create(new TalentAdminService.ProfileForm("新人", null, null, 0, null, null, null, null));
         assertThat(talentService.listListed()).extracting(Talent::getId).doesNotContain(t.getId());
 
         talentAdminService.setListed(t.getId(), true);
@@ -186,7 +186,7 @@ class TalentCatalogScenarioTest {
     @Test
     @DisplayName("Scenario: 关联主播档案与用户 — 获得主播角色")
     void 关联档案与用户() {
-        Talent t = talentAdminService.create("小雨", null, null, 0);
+        Talent t = talentAdminService.create(new TalentAdminService.ProfileForm("小雨", null, null, 0, null, null, null, null));
         AppUser user = userService.registerOrUpdate("sc_" + System.nanoTime(), null, "某人", null);
         assertThat(user.hasRole(UserRole.TALENT)).isFalse();
 
@@ -236,7 +236,7 @@ class TalentCatalogScenarioTest {
     // ---------- 辅助 ----------
 
     private Talent listed(String nickname, int sortOrder) {
-        Talent t = talentAdminService.create(nickname, null, null, sortOrder);
+        Talent t = talentAdminService.create(new TalentAdminService.ProfileForm(nickname, null, null, sortOrder, null, null, null, null));
         talentAdminService.setListed(t.getId(), true);
         return talentService.require(t.getId());
     }

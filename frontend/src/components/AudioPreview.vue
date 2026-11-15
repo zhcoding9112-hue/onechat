@@ -46,17 +46,24 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 色值一律取自设计令牌：主色一改，试听条跟着变。 */
 .audio {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   padding: 3px 10px;
   border: none;
-  border-radius: 999px;
-  background: #f0f4ff;
-  color: #3366ff;
-  font-size: 12px;
+  border-radius: var(--r-pill);
+  background: var(--c-brand);
+  color: #fff;
+  font-size: var(--fs-sm);
   line-height: 1.4;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+}
+
+/* 叠在封面图上的角标用法：加一点投影保证压在浅色图片上仍可读。 */
+.audio.on-cover {
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
 }
 </style>

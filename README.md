@@ -227,3 +227,10 @@ openspec/           需求规格与任务
 - **Element Plus 只给运营后台用，不得在 `main.ts` 全局注册**。粉丝端是微信里的移动 H5，
   首屏体积直接影响转化率。全局注册会让首屏从 324 KB 涨到 1595 KB。
   后台组件通过 `unplugin-vue-components` 按需引入，随 `/admin` 路由进异步分块。
+- **MyBatis-Plus 的驼峰转下划线不会在字母与数字之间加分隔**：`promoTag1` 映射出的列名是
+  `promo_tag1` 而非 `promo_tag_1`。字段名以数字结尾时必须用 `@TableField` 显式声明列名，
+  否则运行时报 `Unknown column`，编译期毫无提示。
+- **设计令牌是粉丝端唯一的色值来源**，组件与页面一律引用 `--c-*`，不得写死色值。
+  Vant 的主题变量在 `styles.css` 末尾统一映射到令牌；漏掉这层映射，改主色就只改到自己写的
+  那部分样式，Vant 组件纹丝不动。衍生色（`--c-brand-deep` / `--c-brand-soft`）由
+  `color-mix` 从主色派生，并保留静态兜底值供不支持 `color-mix` 的老 WebView 使用。

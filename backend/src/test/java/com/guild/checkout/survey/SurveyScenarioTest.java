@@ -82,7 +82,7 @@ class SurveyScenarioTest {
         ServiceSpec spec = catalogService.createSpec(item.getId(), "m30", "30分钟", 30, 30);
         specId = spec.getId();
 
-        Talent talent = talentAdminService.create("小雨", null, null, 0);
+        Talent talent = talentAdminService.create(new TalentAdminService.ProfileForm("小雨", null, null, 0, null, null, null, null));
         talentAdminService.setListed(talent.getId(), true);
         talentId = talent.getId();
         priceService.setPrice(talentId, specId, 1500, true);
@@ -270,7 +270,7 @@ class SurveyScenarioTest {
     void 主播只看自己的评分() throws Exception {
         submit(completeOrder(), 5);
 
-        Talent other = talentAdminService.create("阿澈", null, null, 0);
+        Talent other = talentAdminService.create(new TalentAdminService.ProfileForm("阿澈", null, null, 0, null, null, null, null));
         AppUser otherTalentUser = newUser("qx_");
         talentAdminService.linkUser(other.getId(), otherTalentUser.getId());
 
