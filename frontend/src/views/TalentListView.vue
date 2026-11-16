@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import FanTabBar from '@/components/FanTabBar.vue'
 import { NavBar, Empty, Skeleton } from 'vant'
 import TalentCardItem from '@/components/TalentCardItem.vue'
 import { homeApi, type CategoryView, type EntryView, type MarqueeItem, type PopularTalentView } from '@/api/home'
@@ -253,6 +254,8 @@ function initial(nickname: string) {
         <p v-else-if="loadingMore" class="end">加载中…</p>
       </div>
     </section>
+
+    <FanTabBar />
   </div>
 </template>
 
@@ -262,6 +265,8 @@ function initial(nickname: string) {
   overflow-y: auto;
   background: var(--g-page);
   background-attachment: fixed;
+  /* 给底部导航让出位置，否则最后一行卡片会被压在导航下面 */
+  padding-bottom: 68px;
 }
 
 .nav-link {

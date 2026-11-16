@@ -5,6 +5,7 @@ import { NavBar, Cell, CellGroup, Image as VanImage, Skeleton } from 'vant'
 import { fetchCurrentUser, type CurrentUser } from '@/api/session'
 import { fanLevelApi, type FanLevel } from '@/api/fanLevel'
 import { centsToYuan } from '@/utils/money'
+import FanTabBar from '@/components/FanTabBar.vue'
 
 const router = useRouter()
 const me = ref<CurrentUser | null>(null)
@@ -55,6 +56,7 @@ onMounted(async () => {
     </CellGroup>
 
     <CellGroup inset style="margin-top: 12px">
+      <Cell title="消息" is-link @click="router.push('/me/chats')" />
       <Cell title="动态广场" is-link @click="router.push('/feed')" />
       <Cell title="打赏榜" is-link @click="router.push('/leaderboard')" />
       <Cell title="我的订单" is-link @click="router.push('/orders')" />
@@ -72,10 +74,18 @@ onMounted(async () => {
     <CellGroup v-if="me.operator" inset title="运营" style="margin-top: 12px">
       <Cell title="进入运营后台" is-link @click="router.push('/admin')" />
     </CellGroup>
+
+    <div class="tab-space"></div>
   </template>
+
+  <FanTabBar />
 </template>
 
 <style scoped>
+.tab-space {
+  height: 68px;
+}
+
 .header {
   display: flex;
   align-items: center;

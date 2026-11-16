@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { NavBar, Empty, Skeleton, NoticeBar, showToast } from 'vant'
 import AudioPreview from '@/components/AudioPreview.vue'
 import { talentApi, type TalentDetail } from '@/api/talent'
+import { chatApi } from '@/api/chat'
+import { ApiError } from '@/api/http'
 import { formatPrice } from '@/utils/money'
 import { ClientEvent, track } from '@/api/analytics'
 import { savePendingIntent, takePendingIntent } from '@/utils/pendingIntent'
@@ -15,6 +17,7 @@ const loading = ref(true)
 const failed = ref(false)
 const selectedSpecId = ref<number | null>(null)
 const favoriting = ref(false)
+const opening = ref(false)
 
 const talentId = computed(() => Number(route.params.id))
 
@@ -88,6 +91,20 @@ async function toggleFavorite() {
     takePendingIntent()
   } finally {
     favoriting.value = false
+  }
+}
+
+/** 进聊天。会话由服务端「有就打开、没有才建」，连点两下也只会有一个会话。 */
+async function openChat() {
+  if (opening.value) return
+  opening.value = true
+  try {
+    const { conversationId } = await chatApi.openWithTalent(talentId.value)
+    await router.push(`/me/chats/${conversationId}`)
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e
+  } finally {
+    opening.value = false
   }
 }
 
@@ -202,6 +219,17 @@ function order(specId?: number) {
             <path d="M10 5v10M7 8h6M7 12h6" stroke="var(--c-text-2)" stroke-width="1.4" />
           </svg>
           <span>打赏</span>
+        </button>
+        <button class="icon-btn" :disabled="opening" @click="openChat()">
+          <svg width="20" height="18" viewBox="0 0 20 20">
+            <path
+              d="M10 3c4.4 0 8 2.7 8 6s-3.6 6-8 6c-.8 0-1.6-.1-2.3-.3L4 16l.8-2.8C3.1 12.1 2 10.6 2 9c0-3.3 3.6-6 8-6z"
+              fill="none"
+              stroke="var(--c-text-2)"
+              stroke-width="1.4"
+            />
+          </svg>
+          <span>聊天</span>
         </button>
         <button v-if="detail.available" class="cta" @click="order()">
           立即下单

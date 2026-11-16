@@ -117,6 +117,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的元子' },
   },
   {
+    path: '/me/chats',
+    name: 'chat-list',
+    component: () => import('@/views/ChatListView.vue'),
+    meta: { title: '消息' },
+  },
+  {
+    path: '/me/chats/:id',
+    name: 'chat-room',
+    component: () => import('@/views/ChatRoomView.vue'),
+    meta: { title: '聊天' },
+  },
+  {
     path: '/me',
     name: 'profile',
     component: () => import('@/views/ProfileView.vue'),
@@ -145,6 +157,18 @@ const routes: RouteRecordRaw[] = [
         name: 'talent-feed',
         component: () => import('@/talent/views/TalentFeedView.vue'),
         meta: { title: '我的动态' },
+      },
+      {
+        path: 'chats',
+        name: 'talent-chat-list',
+        component: () => import('@/talent/views/TalentChatListView.vue'),
+        meta: { title: '消息' },
+      },
+      {
+        path: 'chats/:id',
+        name: 'talent-chat-room',
+        component: () => import('@/talent/views/TalentChatRoomView.vue'),
+        meta: { title: '聊天' },
       },
       {
         path: 'income',
@@ -196,6 +220,12 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-feed',
         component: () => import('@/admin/views/FeedView.vue'),
         meta: { title: '内容审核' },
+      },
+      {
+        path: 'chat',
+        name: 'admin-chat',
+        component: () => import('@/admin/views/ChatView.vue'),
+        meta: { title: '会话查询' },
       },
       {
         path: 'fan-levels',

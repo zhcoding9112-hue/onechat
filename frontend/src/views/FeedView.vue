@@ -11,6 +11,7 @@ import {
   showImagePreview,
 } from 'vant'
 import { feedApi, type CrushWallItem, type FeedPostView } from '@/api/feed'
+import FanTabBar from '@/components/FanTabBar.vue'
 import { ApiError } from '@/api/http'
 
 const router = useRouter()
@@ -104,7 +105,7 @@ function timeText(iso: string) {
 
 <template>
   <div class="page">
-    <NavBar title="动态广场" left-arrow @click-left="$router.back()" />
+    <NavBar title="动态广场" />
 
     <!-- 心动墙 -->
     <section v-if="wall.length" class="wall">
@@ -173,6 +174,8 @@ function timeText(iso: string) {
       </button>
       <p v-else class="end">没有更多了</p>
     </div>
+
+    <FanTabBar />
   </div>
 </template>
 
@@ -181,7 +184,7 @@ function timeText(iso: string) {
   min-height: 100vh;
   background: var(--g-page);
   background-attachment: fixed;
-  padding-bottom: var(--sp-8);
+  padding-bottom: 68px;
 }
 
 /* ---------- 心动墙 ---------- */
