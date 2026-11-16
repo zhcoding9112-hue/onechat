@@ -44,6 +44,8 @@ public class OrderViewAssembler {
                 order.getServiceSpecName(),
                 order.getUnitPriceCents(),
                 order.getQuantity(),
+                order.getOriginalCents() == null ? order.getPayableCents() : order.getOriginalCents(),
+                order.getCouponDiscountCents() == null ? 0 : order.getCouponDiscountCents(),
                 order.getPayableCents(),
                 viewer == Viewer.OPERATOR ? order.getPaidCents() : null,
                 status.name(),

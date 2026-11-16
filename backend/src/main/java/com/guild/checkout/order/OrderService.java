@@ -8,6 +8,7 @@ import com.guild.checkout.pricing.PriceQuote;
 import com.guild.checkout.settlement.SettlementEntry;
 import com.guild.checkout.settlement.SettlementService;
 import com.guild.checkout.pricing.PricingService;
+import com.guild.checkout.promotion.CouponService;
 import com.guild.checkout.analytics.AnalyticsService;
 import com.guild.checkout.analytics.EventKey;
 import com.guild.checkout.order.timeout.DelayQueue;
@@ -53,6 +54,7 @@ public class OrderService {
     private final OrderNotifier notifier;
     private final SettlementService settlementService;
     private final AnalyticsService analytics;
+    private final CouponService couponService;
 
     public OrderService(ServiceOrderMapper orderMapper,
                         OrderStateService stateService,
@@ -64,7 +66,8 @@ public class OrderService {
                         @Qualifier("acceptTimeoutQueue") DelayQueue acceptQueue,
                         OrderNotifier notifier,
                         SettlementService settlementService,
-                        AnalyticsService analytics) {
+                        AnalyticsService analytics,
+                        CouponService couponService) {
         this.orderMapper = orderMapper;
         this.stateService = stateService;
         this.refGenerator = refGenerator;
@@ -76,6 +79,7 @@ public class OrderService {
         this.notifier = notifier;
         this.settlementService = settlementService;
         this.analytics = analytics;
+        this.couponService = couponService;
     }
 
     // ---------- 创建 ----------
@@ -102,6 +106,13 @@ public class OrderService {
         // 取价失败会抛 PricingException（档位停用、未配价等），直接透出给粉丝
         PriceQuote quote = pricingService.quote(command.talentId(), command.serviceSpecId(), quantity);
 
+        // 券只减少实付，不动分成：quote.payableCents() 就是原价，也是分成的基数。
+        // 校验与占用分两步——占用要带订单 id，而订单号要等插入后才有。
+        CouponService.Discount discount = command.userCouponId() == null
+                ? CouponService.Discount.NONE
+                : couponService.validate(command.fanUserId(), command.userCouponId(),
+                        quote.payableCents(), quote.serviceItemId());
+
         LocalDateTime now = LocalDateTime.now();
         ServiceOrder order = new ServiceOrder();
         order.setFanUserId(command.fanUserId());
@@ -112,7 +123,10 @@ public class OrderService {
         order.setServiceSpecName(quote.serviceSpecName());
         order.setUnitPriceCents(quote.unitPriceCents());
         order.setQuantity(quote.quantity());
-        order.setPayableCents(quote.payableCents());
+        order.setOriginalCents(quote.payableCents());
+        order.setCouponDiscountCents(discount.discountCents());
+        order.setUserCouponId(discount.userCouponId());
+        order.setPayableCents(quote.payableCents() - discount.discountCents());
         order.setCommissionRateBp(quote.commissionRateBp());
         order.setGuildCents(quote.guildCents());
         order.setTalentCents(quote.talentCents());
@@ -123,6 +137,11 @@ public class OrderService {
         order.setPayDeadline(now.plusMinutes(deadlines.payMinutes()));
 
         insertWithUniqueRef(order);
+        // 占用失败就抛，本事务回滚把订单一起撤掉——
+        // 绝不能留下「订单记了抵扣、券却没被占住」的半成品，那张券就能被二次使用
+        if (discount.userCouponId() != null) {
+            couponService.lock(command.fanUserId(), discount.userCouponId(), order.getId());
+        }
         stateService.recordCreation(order, command.fanUserId());
         payQueue.schedule(order.getId(), order.getPayDeadline());
         analytics.track(AnalyticsService.Track.of(EventKey.SUBMIT_ORDER)
@@ -130,8 +149,9 @@ public class OrderService {
                 .talent(quote.talentId())
                 .serviceItem(quote.serviceItemId())
                 .order(order.getOrderRef()));
-        log.info("订单 {} 已创建，粉丝 {} 指定主播 {}，应付 {} 分",
-                order.getOrderRef(), command.fanUserId(), quote.talentId(), quote.payableCents());
+        log.info("订单 {} 已创建，粉丝 {} 指定主播 {}，原价 {} 分、抵扣 {} 分、应付 {} 分",
+                order.getOrderRef(), command.fanUserId(), quote.talentId(),
+                order.getOriginalCents(), order.getCouponDiscountCents(), order.getPayableCents());
         return order;
     }
 

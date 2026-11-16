@@ -2,6 +2,7 @@ package com.guild.checkout.order;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.guild.checkout.common.exception.BusinessException;
+import com.guild.checkout.promotion.CouponService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,10 +29,13 @@ public class OrderStateService {
 
     private final ServiceOrderMapper orderMapper;
     private final OrderStatusLogMapper logMapper;
+    private final CouponService couponService;
 
-    public OrderStateService(ServiceOrderMapper orderMapper, OrderStatusLogMapper logMapper) {
+    public OrderStateService(ServiceOrderMapper orderMapper, OrderStatusLogMapper logMapper,
+                             CouponService couponService) {
         this.orderMapper = orderMapper;
         this.logMapper = logMapper;
+        this.couponService = couponService;
     }
 
     /** 状态推进失败：非法跃迁，或并发下已被别人改掉。 */
@@ -83,9 +87,31 @@ public class OrderStateService {
         }
 
         writeLog(order, from, target, operatorType, operatorId, reason);
+        syncCoupon(order, target, reason);
         log.info("订单 {} 状态 {} → {}，触发者 {}",
                 order.getOrderRef(), from, target, operatorType);
         return order;
+    }
+
+    /**
+     * 券随订单状态走。
+     *
+     * 放在这里而不是各个业务方法里：取消、退款、支付超时、接单超时是四条不同的路径，
+     * 逐个去挂钩子，迟早会漏掉一条，而漏掉的那条会把粉丝的券永久锁死。
+     * 状态推进只有这一个入口，挂在这里就不可能漏。
+     */
+    private void syncCoupon(ServiceOrder order, OrderStatus target, String reason) {
+        if (order.getUserCouponId() == null) {
+            return;
+        }
+        if (target == OrderStatus.PENDING_ACCEPT) {
+            // 确认收款即核销
+            couponService.redeem(order.getId());
+        } else if (target.isTerminal() && target != OrderStatus.COMPLETED) {
+            // 取消 / 超时 / 退款都要把券还回去；已过期的不退，由 release 记录原因
+            couponService.release(order.getId(),
+                    reason == null || reason.isBlank() ? target.label() : reason);
+        }
     }
 
     /** 创建订单时的首条日志：没有前一状态。 */

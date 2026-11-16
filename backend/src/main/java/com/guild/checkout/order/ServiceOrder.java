@@ -29,6 +29,13 @@ public class ServiceOrder {
 
     private Long unitPriceCents;
     private Integer quantity;
+    /** 订单原价（未用券前）。分成以它为基数，与实付无关。 */
+    private Long originalCents;
+    /** 券抵扣金额，由公会承担。 */
+    private Long couponDiscountCents;
+    /** 使用的 user_coupon.id，没用券时为 null。 */
+    private Long userCouponId;
+    /** 粉丝实付 = 原价 - 券抵扣。支付侧只认它。 */
     private Long payableCents;
     private Long paidCents;
     private Integer commissionRateBp;
@@ -84,6 +91,12 @@ public class ServiceOrder {
     public void setUnitPriceCents(Long unitPriceCents) { this.unitPriceCents = unitPriceCents; }
     public Integer getQuantity() { return quantity; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public Long getOriginalCents() { return originalCents; }
+    public void setOriginalCents(Long originalCents) { this.originalCents = originalCents; }
+    public Long getCouponDiscountCents() { return couponDiscountCents; }
+    public void setCouponDiscountCents(Long couponDiscountCents) { this.couponDiscountCents = couponDiscountCents; }
+    public Long getUserCouponId() { return userCouponId; }
+    public void setUserCouponId(Long userCouponId) { this.userCouponId = userCouponId; }
     public Long getPayableCents() { return payableCents; }
     public void setPayableCents(Long payableCents) { this.payableCents = payableCents; }
     public Long getPaidCents() { return paidCents; }

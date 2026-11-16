@@ -40,27 +40,36 @@ public class SettlementService {
 
     // ---------- 记账 ----------
 
-    /** 订单完成时记一笔分账。重复调用是幂等的。 */
+    /**
+     * 订单完成时记一笔分账。重复调用是幂等的。
+     *
+     * 金额基数取**原价**而不是实付：券的抵扣由公会承担，主播分成一分不少。
+     * 抵扣额单独记在 promoCostCents 上，报表据此单列促销成本——
+     * 报表只读台账不回查订单表（见本类开头），所以这个数必须在记账时就落下来。
+     */
     @Transactional
     public SettlementEntry recordOrder(ServiceOrder order) {
+        long promoCost = order.getCouponDiscountCents() == null ? 0 : order.getCouponDiscountCents();
         return record(SettlementEntry.SOURCE_ORDER, order.getId(), order.getOrderRef(),
-                order.getTalentId(), order.getPayableCents(), order.getCommissionRateBp(),
-                order.getGuildCents(), order.getTalentCents(),
+                order.getTalentId(), order.getOriginalCents(), order.getCommissionRateBp(),
+                order.getGuildCents(), order.getTalentCents(), promoCost,
                 order.getCompletedAt() == null ? LocalDateTime.now() : order.getCompletedAt());
     }
 
     /** 打赏完成时记一笔分账。 */
     @Transactional
     public SettlementEntry recordTip(TipRecord tip) {
+        // 打赏不参与促销，促销成本恒为 0
         return record(SettlementEntry.SOURCE_TIP, tip.getId(), tip.getTipRef(),
                 tip.getTalentId(), tip.getAmountCents(), tip.getCommissionRateBp(),
-                tip.getGuildCents(), tip.getTalentCents(),
+                tip.getGuildCents(), tip.getTalentCents(), 0L,
                 tip.getPaidAt() == null ? LocalDateTime.now() : tip.getPaidAt());
     }
 
     private SettlementEntry record(String sourceType, Long sourceId, String sourceRef,
                                    Long talentId, Long amountCents, Integer rateBp,
-                                   Long guildCents, Long talentCents, LocalDateTime occurredAt) {
+                                   Long guildCents, Long talentCents, Long promoCostCents,
+                                   LocalDateTime occurredAt) {
         if (guildCents + talentCents != amountCents) {
             // 来源数据本身就不平，记进台账只会把错误固化
             throw new IllegalStateException(
@@ -77,6 +86,7 @@ public class SettlementService {
         entry.setCommissionRateBp(rateBp);
         entry.setGuildCents(guildCents);
         entry.setTalentCents(talentCents);
+        entry.setPromoCostCents(promoCostCents == null ? 0L : promoCostCents);
         entry.setStatus(SettlementEntry.ACTIVE);
         entry.setOccurredAt(occurredAt);
 
@@ -132,6 +142,8 @@ public class SettlementService {
             long tipAmountCents,
             long guildCents,
             long talentCents,
+            /** 促销成本（券抵扣），由公会承担，不从主播应得里扣。 */
+            long promoCostCents,
             int orderCount,
             int tipCount,
             boolean settled,

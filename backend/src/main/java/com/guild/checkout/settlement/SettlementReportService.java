@@ -41,13 +41,14 @@ public class SettlementReportService {
 
         Map<Long, long[]> sums = new LinkedHashMap<>();
         for (SettlementEntry e : settlementService.activeEntries(period, null)) {
-            // [订单金额, 打赏金额, 公会分成, 主播应得, 订单数, 打赏数]
-            long[] acc = sums.computeIfAbsent(e.getTalentId(), k -> new long[6]);
+            // [订单金额, 打赏金额, 公会分成, 主播应得, 订单数, 打赏数, 促销成本]
+            long[] acc = sums.computeIfAbsent(e.getTalentId(), k -> new long[7]);
             boolean isOrder = SettlementEntry.SOURCE_ORDER.equals(e.getSourceType());
             acc[isOrder ? 0 : 1] += e.getAmountCents();
             acc[2] += e.getGuildCents();
             acc[3] += e.getTalentCents();
             acc[isOrder ? 4 : 5] += 1;
+            acc[6] += e.getPromoCostCents() == null ? 0 : e.getPromoCostCents();
         }
 
         Map<Long, SettlementMark> marks = new LinkedHashMap<>();
@@ -57,11 +58,11 @@ public class SettlementReportService {
 
         List<SettlementService.TalentStatement> rows = new ArrayList<>();
         for (Talent talent : talentService.listAll()) {
-            long[] acc = sums.getOrDefault(talent.getId(), new long[6]);
+            long[] acc = sums.getOrDefault(talent.getId(), new long[7]);
             SettlementMark mark = marks.get(talent.getId());
             rows.add(new SettlementService.TalentStatement(
                     talent.getId(), talent.getNickname(), period,
-                    acc[0], acc[1], acc[2], acc[3], (int) acc[4], (int) acc[5],
+                    acc[0], acc[1], acc[2], acc[3], acc[6], (int) acc[4], (int) acc[5],
                     mark != null, mark == null ? null : mark.getSettledAt()));
         }
         return rows;
@@ -77,7 +78,7 @@ public class SettlementReportService {
         StringBuilder sb = new StringBuilder();
         // BOM，否则 Excel 打开中文会乱码
         sb.append('﻿');
-        sb.append("主播ID,主播昵称,周期,服务订单金额,打赏金额,公会分成,主播应得,订单数,打赏数,是否已结清\n");
+        sb.append("主播ID,主播昵称,周期,服务订单金额,打赏金额,公会分成,主播应得,促销成本,订单数,打赏数,是否已结清\n");
 
         for (SettlementService.TalentStatement row : monthly(period)) {
             sb.append(row.talentId()).append(',')
@@ -87,6 +88,7 @@ public class SettlementReportService {
                     .append(yuan(row.tipAmountCents())).append(',')
                     .append(yuan(row.guildCents())).append(',')
                     .append(yuan(row.talentCents())).append(',')
+                    .append(yuan(row.promoCostCents())).append(',')
                     .append(row.orderCount()).append(',')
                     .append(row.tipCount()).append(',')
                     .append(row.settled() ? "是" : "否").append('\n');
@@ -98,7 +100,7 @@ public class SettlementReportService {
     public byte[] exportDetailCsv(String period, long talentId) {
         StringBuilder sb = new StringBuilder();
         sb.append('﻿');
-        sb.append("来源类型,来源单号,发生时间,金额,分成比例,公会分成,主播应得,状态,冲销原因\n");
+        sb.append("来源类型,来源单号,发生时间,金额,分成比例,公会分成,主播应得,促销成本,状态,冲销原因\n");
 
         for (SettlementEntry e : settlementService.allEntries(period, talentId)) {
             sb.append(SettlementEntry.SOURCE_ORDER.equals(e.getSourceType()) ? "服务订单" : "打赏")
@@ -108,6 +110,7 @@ public class SettlementReportService {
                     .append(',').append(rate(e.getCommissionRateBp()))
                     .append(',').append(yuan(e.getGuildCents()))
                     .append(',').append(yuan(e.getTalentCents()))
+                    .append(',').append(yuan(e.getPromoCostCents() == null ? 0 : e.getPromoCostCents()))
                     .append(',').append(e.isActive() ? "有效" : "已冲销")
                     .append(',').append(csv(e.getReverseReason()))
                     .append('\n');

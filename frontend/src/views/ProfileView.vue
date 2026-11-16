@@ -34,6 +34,7 @@ onMounted(async () => {
     <CellGroup inset style="margin-top: 12px">
       <Cell title="我的订单" is-link @click="router.push('/orders')" />
       <Cell title="我的收藏" is-link @click="router.push('/me/favorites')" />
+      <Cell title="我的优惠券" is-link @click="router.push('/me/coupons')" />
       <!-- 只有入口没有充值：元子页本身也不含任何充值、兑换与提现 -->
       <Cell title="我的元子" is-link @click="router.push('/me/credits')" />
     </CellGroup>

@@ -256,3 +256,17 @@ openspec/           需求规格与任务
   表上再加一条 CHECK 约束兜底，防止日后有人绕过服务层直接写库。
 - **MySQL 的 CHECK 违反（error 3819）不是 `DataIntegrityViolationException`**。
   Spring 把它归到 `UncategorizedSQLException`，断言时按 `DataAccessException` 加约束名匹配。
+- **订单的「原价」与「实付」必须是两个字段**。用券后，分成按原价算、收款按实付算：
+  券的抵扣由公会承担，主播分成一分不少。本项目里 `payable_cents` 保持「粉丝要付的钱」
+  这个含义不变（支付侧一行没改），新增 `original_cents` 作为分成基数，
+  `coupon_discount_cents` 记抵扣额。台账 `settlement_entry` 也同步加了 `promo_cost_cents`，
+  因为结算报表只读台账不回查订单表（见 V9 注释），促销成本必须在记账那一刻就落下来。
+- **加字段的迁移要显式回填历史行**。`ADD COLUMN ... NOT NULL DEFAULT 0` 只对新行生效，
+  已有行会拿到 0。`original_cents` 若留 0，历史订单的分成基数就全变成 0 了，
+  所以迁移里跟一条 `UPDATE ... SET original_cents = payable_cents`。
+- **券随订单状态走的钩子挂在状态机入口，不要逐个业务方法去挂**。取消、退款、支付超时、
+  接单超时是四条不同的路径，逐个挂钩子迟早漏一条，而漏掉的那条会把粉丝的券永久锁死。
+  本项目挂在 `OrderStateService.transition`——所有状态变更的唯一入口。
+- **Vant 的 Radio 不渲染原生 input，外层 `<label>` 不会把点击转给它**。
+  包一层 label 看着能点，实际只有那个小圆圈能点中，手机上命中区域小得离谱。
+  整行可选要显式在容器上绑 `@click`。

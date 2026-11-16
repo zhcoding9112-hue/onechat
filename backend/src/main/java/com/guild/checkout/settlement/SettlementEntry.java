@@ -25,6 +25,8 @@ public class SettlementEntry {
     private Integer commissionRateBp;
     private Long guildCents;
     private Long talentCents;
+    /** 促销成本（券抵扣），由公会承担。不影响 amountCents 与分成。 */
+    private Long promoCostCents;
     private String status;
     private LocalDateTime reversedAt;
     private String reverseReason;
@@ -54,6 +56,8 @@ public class SettlementEntry {
     public void setGuildCents(Long guildCents) { this.guildCents = guildCents; }
     public Long getTalentCents() { return talentCents; }
     public void setTalentCents(Long talentCents) { this.talentCents = talentCents; }
+    public Long getPromoCostCents() { return promoCostCents; }
+    public void setPromoCostCents(Long promoCostCents) { this.promoCostCents = promoCostCents; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public LocalDateTime getReversedAt() { return reversedAt; }

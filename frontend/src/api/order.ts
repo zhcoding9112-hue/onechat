@@ -35,6 +35,11 @@ export interface OrderView {
   serviceSpecName: string
   unitPriceCents: number
   quantity: number
+  /** 订单原价（未用券前）。分成以它为基数。 */
+  originalCents: number
+  /** 券抵扣金额，0 表示没用券。 */
+  couponDiscountCents: number
+  /** 实付 = 原价 - 抵扣。 */
   payableCents: number
   paidCents: number | null
   status: OrderStatusValue
@@ -68,6 +73,8 @@ export interface CreateOrderRequest {
   quantity: number
   contact: string
   remark?: string
+  /** 使用的券（user_coupon.id）。单笔限一张，所以是单值。 */
+  userCouponId?: number | null
 }
 
 export const orderApi = {

@@ -16,6 +16,11 @@ public record OrderView(
         String serviceSpecName,
         long unitPriceCents,
         int quantity,
+        /** 订单原价（未用券前）。 */
+        long originalCents,
+        /** 券抵扣金额，0 表示没用券。 */
+        long couponDiscountCents,
+        /** 粉丝实付 = 原价 - 抵扣。 */
         long payableCents,
         Long paidCents,
         String status,

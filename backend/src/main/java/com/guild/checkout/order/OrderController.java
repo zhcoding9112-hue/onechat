@@ -46,7 +46,9 @@ public class OrderController {
             @Min(value = 1, message = "数量必须大于零") int quantity,
             @NotBlank(message = "联系方式为必填")
             @Size(max = 64, message = "联系方式不超过 64 字符") String contact,
-            @Size(max = 255, message = "备注不超过 255 字符") String remark) {
+            @Size(max = 255, message = "备注不超过 255 字符") String remark,
+            /** 使用的券，不用券不传。单笔限一张，所以这里是单值而不是数组。 */
+            Long userCouponId) {
     }
 
     /** 指定主播下单。 */
@@ -55,7 +57,7 @@ public class OrderController {
         long userId = CurrentUserHolder.requireUserId();
         ServiceOrder order = orderService.create(new OrderCreateCommand(
                 userId, req.talentId(), req.serviceSpecId(), req.quantity(),
-                req.contact(), req.remark()));
+                req.contact(), req.remark(), req.userCouponId()));
         return ApiResponse.ok(assembler.assemble(order, OrderViewAssembler.Viewer.FAN));
     }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NavBar,
@@ -12,12 +12,14 @@ import {
   RadioGroup,
   Radio,
   SubmitBar,
+  Popup,
   showToast,
 } from 'vant'
 import { talentApi, type SpecOption, type TalentDetail } from '@/api/talent'
 import { orderApi } from '@/api/order'
+import { couponApi, type CouponItem } from '@/api/coupon'
 import { ApiError } from '@/api/http'
-import { formatPrice } from '@/utils/money'
+import { centsToYuan, formatPrice } from '@/utils/money'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,9 +43,55 @@ const selectedSpec = computed(() =>
   allSpecs.value.find((s) => s.serviceSpecId === selectedSpecId.value) ?? null,
 )
 
-const payableCents = computed(() =>
+/** 原价：未用券前的金额。分成以它为基数，所以它也是券门槛的判定基数。 */
+const originalCents = computed(() =>
   selectedSpec.value ? selectedSpec.value.unitPriceCents * quantity.value : 0,
 )
+
+/** 选中档位所属的服务项目，用于取限定品类的券。 */
+const selectedItemId = computed(() => {
+  const group = (detail.value?.services ?? []).find((g) =>
+    g.specs.some((s) => s.serviceSpecId === selectedSpecId.value),
+  )
+  return group?.serviceItemId ?? null
+})
+
+const coupons = ref<CouponItem[]>([])
+const chosenCouponId = ref<number | null>(null)
+const couponSheetOpen = ref(false)
+
+const chosenCoupon = computed(
+  () => coupons.value.find((c) => c.userCouponId === chosenCouponId.value) ?? null,
+)
+
+const discountCents = computed(() => chosenCoupon.value?.amountCents ?? 0)
+const payableCents = computed(() => originalCents.value - discountCents.value)
+
+/**
+ * 可用券由后端判定。
+ *
+ * 门槛、有效期、品类三项规则只写在后端一处——前端再算一遍，两处迟早会漂移，
+ * 而漂移的表现是「前端让你选，提交时被拒」。
+ */
+async function reloadCoupons() {
+  if (!originalCents.value) {
+    coupons.value = []
+    chosenCouponId.value = null
+    return
+  }
+  try {
+    coupons.value = await couponApi.usable(originalCents.value, selectedItemId.value)
+  } catch {
+    // 券加载失败不该挡住下单，退化成「这单不用券」
+    coupons.value = []
+  }
+  // 改了档位或数量后，原先选中的券可能已经不满足门槛
+  if (chosenCouponId.value && !coupons.value.some((c) => c.userCouponId === chosenCouponId.value)) {
+    chosenCouponId.value = null
+  }
+}
+
+watch([originalCents, selectedItemId], reloadCoupons)
 
 onMounted(async () => {
   try {
@@ -51,6 +99,7 @@ onMounted(async () => {
     const preset = Number(route.query.specId)
     const candidate = allSpecs.value.find((s) => s.serviceSpecId === preset)
     selectedSpecId.value = candidate?.serviceSpecId ?? allSpecs.value[0]?.serviceSpecId ?? null
+    await reloadCoupons()
   } finally {
     loading.value = false
   }
@@ -74,6 +123,7 @@ async function submit() {
       quantity: quantity.value,
       contact: contact.value.trim(),
       remark: remark.value.trim() || undefined,
+      userCouponId: chosenCouponId.value,
     })
     // 下单成功直接进入支付环节，少一次跳转
     await router.replace(`/orders/${order.id}/payment`)
@@ -103,11 +153,17 @@ async function submit() {
             class="group"
           >
             <p class="group-name">{{ group.name }}</p>
+            <!--
+              整行可点：Vant 的 Radio 不渲染原生 input，外层 label 不会把点击转给它，
+              结果是价格和两侧留白看着能点其实点不动。实测点 label 无效，点中间那个
+              小圆圈才行——在手机上这个命中区域太小了。
+            -->
             <label
               v-for="spec in group.specs"
               :key="spec.serviceSpecId"
               class="spec"
               :class="{ active: spec.serviceSpecId === selectedSpecId }"
+              @click="selectedSpecId = spec.serviceSpecId"
             >
               <Radio :name="spec.serviceSpecId">
                 <span class="spec-name">{{ spec.name }}</span>
@@ -125,6 +181,17 @@ async function submit() {
         <div class="stepper-row">
           <span>购买数量</span>
           <Stepper v-model="quantity" :min="1" :max="99" integer />
+        </div>
+      </CellGroup>
+
+      <CellGroup inset title="优惠券">
+        <div class="coupon-row" @click="couponSheetOpen = true">
+          <span>优惠券</span>
+          <span v-if="chosenCoupon" class="picked">
+            -{{ formatPrice(chosenCoupon.amountCents) }}
+          </span>
+          <span v-else-if="coupons.length" class="hint">{{ coupons.length }} 张可用</span>
+          <span v-else class="none">暂无可用</span>
         </div>
       </CellGroup>
 
@@ -152,6 +219,34 @@ async function submit() {
       </p>
     </Form>
 
+    <!-- 单笔限一张，所以这里是单选而不是多选 -->
+    <Popup v-model:show="couponSheetOpen" position="bottom" round>
+      <div class="sheet">
+        <h3>选择优惠券</h3>
+        <p class="sheet-tip">单笔订单只能使用一张。门槛按订单原价判定。</p>
+
+        <button class="opt" :class="{ on: chosenCouponId === null }" @click="chosenCouponId = null; couponSheetOpen = false">
+          <span class="opt-name">不使用优惠券</span>
+        </button>
+
+        <button
+          v-for="c in coupons"
+          :key="c.userCouponId"
+          class="opt"
+          :class="{ on: chosenCouponId === c.userCouponId }"
+          @click="chosenCouponId = c.userCouponId; couponSheetOpen = false"
+        >
+          <span class="opt-amount">-¥{{ centsToYuan(c.amountCents) }}</span>
+          <span class="opt-main">
+            <span class="opt-name">{{ c.name }}</span>
+            <span class="opt-sub">满 {{ centsToYuan(c.thresholdCents) }} 可用</span>
+          </span>
+        </button>
+
+        <p v-if="!coupons.length" class="sheet-empty">这笔订单暂时没有可用的券</p>
+      </div>
+    </Popup>
+
     <SubmitBar
       :price="payableCents"
       :loading="submitting"
@@ -162,6 +257,9 @@ async function submit() {
       <template #tip>
         <span v-if="selectedSpec">
           {{ selectedSpec.name }} × {{ quantity }}
+          <template v-if="discountCents">
+            ｜原价 {{ formatPrice(originalCents) }}，已减 {{ formatPrice(discountCents) }}
+          </template>
         </span>
         <span v-else>请先选择服务档位</span>
       </template>
@@ -172,6 +270,94 @@ async function submit() {
 <style scoped>
 .form {
   padding-bottom: 72px;
+}
+
+.coupon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.coupon-row .picked {
+  color: var(--c-price);
+  font-weight: 600;
+}
+
+.coupon-row .hint {
+  color: var(--c-price);
+}
+
+.coupon-row .none {
+  color: #969799;
+}
+
+.sheet {
+  padding: 20px 16px 28px;
+}
+
+.sheet h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sheet-tip {
+  margin: 8px 0 16px;
+  font-size: 12px;
+  color: #969799;
+  text-align: center;
+}
+
+.sheet-empty {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: #969799;
+  text-align: center;
+}
+
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid var(--c-border);
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.opt.on {
+  border-color: var(--c-brand);
+  background: var(--c-brand-soft);
+}
+
+.opt-amount {
+  flex: none;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--c-price);
+}
+
+.opt-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.opt-name {
+  font-size: 14px;
+}
+
+.opt-sub {
+  font-size: 12px;
+  color: #969799;
 }
 
 .group {

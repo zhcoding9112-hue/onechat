@@ -128,6 +128,11 @@ function formatTime(value: string | null) {
       <Cell title="服务" :value="`${order.serviceItemName} · ${order.serviceSpecName}`" />
       <Cell title="数量" :value="String(order.quantity)" />
       <Cell title="单价" :value="formatPrice(order.unitPriceCents)" />
+      <!-- 没用券时原价与实付相同，多列一行只会让人以为被重复收费，所以只在用了券时展开 -->
+      <template v-if="order.couponDiscountCents > 0">
+        <Cell title="原价" :value="formatPrice(order.originalCents)" />
+        <Cell title="优惠券抵扣" :value="`-${formatPrice(order.couponDiscountCents)}`" />
+      </template>
       <Cell title="应付">
         <template #value>
           <span class="price">{{ formatPrice(order.payableCents) }}</span>
