@@ -87,6 +87,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的收藏' },
   },
   {
+    path: '/leaderboard',
+    name: 'leaderboard',
+    component: () => import('@/views/LeaderboardView.vue'),
+    meta: { title: '打赏榜' },
+  },
+  {
     path: '/me/coupons',
     name: 'coupons',
     component: () => import('@/views/CouponsView.vue'),
@@ -166,6 +172,12 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-commission',
         component: () => import('@/admin/views/CommissionView.vue'),
         meta: { title: '分成比例' },
+      },
+      {
+        path: 'fan-levels',
+        name: 'admin-fan-levels',
+        component: () => import('@/admin/views/FanLevelView.vue'),
+        meta: { title: '粉丝等级' },
       },
       {
         path: 'coupons',

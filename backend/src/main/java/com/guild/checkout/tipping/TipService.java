@@ -10,6 +10,7 @@ import com.guild.checkout.pricing.CommissionCalculator;
 import com.guild.checkout.pricing.CommissionSplit;
 import com.guild.checkout.pricing.PricingService;
 import com.guild.checkout.settlement.SettlementEntry;
+import com.guild.checkout.leaderboard.LeaderboardService;
 import com.guild.checkout.settlement.SettlementService;
 import com.guild.checkout.talent.Talent;
 import com.guild.checkout.talent.TalentService;
@@ -44,6 +45,7 @@ public class TipService {
     private final TalentService talentService;
     private final OrderDeadlineProvider deadlines;
     private final SettlementService settlementService;
+    private final LeaderboardService leaderboardService;
 
     public TipService(TipRecordMapper tipMapper,
                       TipSettingMapper settingMapper,
@@ -51,7 +53,8 @@ public class TipService {
                       PricingService pricingService,
                       TalentService talentService,
                       OrderDeadlineProvider deadlines,
-                      SettlementService settlementService) {
+                      SettlementService settlementService,
+                      LeaderboardService leaderboardService) {
         this.tipMapper = tipMapper;
         this.settingMapper = settingMapper;
         this.refGenerator = refGenerator;
@@ -59,6 +62,7 @@ public class TipService {
         this.talentService = talentService;
         this.deadlines = deadlines;
         this.settlementService = settlementService;
+        this.leaderboardService = leaderboardService;
     }
 
     // ---------- 创建 ----------
@@ -142,6 +146,8 @@ public class TipService {
             throw new BusinessException("打赏状态已被其他操作变更，请刷新后重试");
         }
         settlementService.recordTip(tip);
+        // 收款确认即计入榜单。归期按 paidAt，退款时也从同一个周期扣回
+        leaderboardService.recordTip(tip);
         log.info("打赏 {} 已收款 {} 分，直接计为已完成", tip.getTipRef(), paidCents);
         return tip;
     }
@@ -172,6 +178,37 @@ public class TipService {
         tip.setCloseReason(reason);
         tipMapper.updateById(tip);
         settlementService.reverse(SettlementEntry.SOURCE_TIP, tipId, reason);
+        return tip;
+    }
+
+    /**
+     * 运营标记已退款。重复标记是幂等的。
+     *
+     * 与订单的退款一样：台账冲销而不删除，以便追溯；榜单累计按这笔打赏当初
+     * 计入的那个周期扣回，而不是从当前周期扣——否则上月的账永远是错的。
+     */
+    @Transactional
+    public TipRecord markRefunded(long tipId, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("退款原因为必填");
+        }
+        TipRecord tip = require(tipId);
+        if (tip.statusEnum() == TipStatus.REFUNDED) {
+            return tip;
+        }
+        if (tip.statusEnum() != TipStatus.COMPLETED) {
+            throw new BusinessException("打赏当前为%s，不能标记退款".formatted(tip.statusEnum().label()));
+        }
+
+        tip.setStatusEnum(TipStatus.REFUNDED);
+        tip.setClosedAt(LocalDateTime.now());
+        tip.setCloseReason(reason.trim());
+        if (tipMapper.updateById(tip) == 0) {
+            throw new BusinessException("打赏状态已被其他操作变更，请刷新后重试");
+        }
+        settlementService.reverse(SettlementEntry.SOURCE_TIP, tipId, reason.trim());
+        leaderboardService.reverseTip(tip);
+        log.info("打赏 {} 已标记退款：{}", tip.getTipRef(), reason);
         return tip;
     }
 

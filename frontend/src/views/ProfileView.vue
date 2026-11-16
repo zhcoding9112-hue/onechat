@@ -3,9 +3,12 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NavBar, Cell, CellGroup, Image as VanImage, Skeleton } from 'vant'
 import { fetchCurrentUser, type CurrentUser } from '@/api/session'
+import { fanLevelApi, type FanLevel } from '@/api/fanLevel'
+import { centsToYuan } from '@/utils/money'
 
 const router = useRouter()
 const me = ref<CurrentUser | null>(null)
+const level = ref<FanLevel | null>(null)
 const loading = ref(true)
 
 onMounted(async () => {
@@ -13,6 +16,12 @@ onMounted(async () => {
     me.value = await fetchCurrentUser()
   } finally {
     loading.value = false
+  }
+  // 等级加载失败不该挡住整页，单独 catch 掉
+  try {
+    level.value = await fanLevelApi.mine()
+  } catch {
+    level.value = null
   }
 })
 </script>
@@ -26,12 +35,27 @@ onMounted(async () => {
     <section class="header">
       <VanImage :src="me.avatarUrl" width="56" height="56" round fit="cover" />
       <div class="info">
-        <p class="name">{{ me.nickname }}</p>
+        <p class="name">
+          {{ me.nickname }}
+          <span v-if="level" class="level">{{ level.name }}</span>
+        </p>
         <p v-if="me.placeholderProfile" class="hint">微信资料未获取到，不影响使用</p>
       </div>
     </section>
 
+    <!-- 等级只影响展示，不影响下单价格与分成 -->
+    <CellGroup v-if="level" inset style="margin-top: 12px">
+      <Cell title="累计消费" :value="`¥${centsToYuan(level.spentCents)}`" />
+      <Cell
+        v-if="level.toNextCents !== null"
+        title="距下一等级"
+        :value="`还差 ¥${centsToYuan(level.toNextCents)} 到 ${level.nextName}`"
+      />
+      <Cell v-else title="等级" value="已是最高等级" />
+    </CellGroup>
+
     <CellGroup inset style="margin-top: 12px">
+      <Cell title="打赏榜" is-link @click="router.push('/leaderboard')" />
       <Cell title="我的订单" is-link @click="router.push('/orders')" />
       <Cell title="我的收藏" is-link @click="router.push('/me/favorites')" />
       <Cell title="我的优惠券" is-link @click="router.push('/me/coupons')" />
@@ -63,6 +87,17 @@ onMounted(async () => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.level {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-brand-deep);
+  background: var(--c-brand-soft);
+  vertical-align: middle;
 }
 
 .hint {

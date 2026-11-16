@@ -41,6 +41,7 @@ function go(path: string) {
         <el-menu-item index="/admin/commission">分成比例</el-menu-item>
         <el-menu-item index="/admin/coupons">优惠券</el-menu-item>
         <el-menu-item index="/admin/credits">元子记账</el-menu-item>
+        <el-menu-item index="/admin/fan-levels">粉丝等级</el-menu-item>
       </el-menu>
       <span class="admin-user">
         <template v-if="loading">加载中…</template>

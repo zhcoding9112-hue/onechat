@@ -39,6 +39,9 @@ public class TipAdminController {
     public record LimitRequest(Long minCents, Long maxCents) {
     }
 
+    public record RefundRequest(String reason) {
+    }
+
     @GetMapping
     public ApiResponse<List<TipRecord>> list(@RequestParam(required = false) String status) {
         var query = Wrappers.<TipRecord>lambdaQuery();
@@ -52,6 +55,13 @@ public class TipAdminController {
     public ApiResponse<TipRecord> confirm(@PathVariable long tipId,
                                           @Valid @RequestBody ConfirmRequest req) {
         return ApiResponse.ok(tipService.confirmPayment(tipId, req.paidCents(), req.note()));
+    }
+
+    /** 标记已退款：台账冲销，榜单按这笔打赏原本计入的周期扣回。 */
+    @PutMapping("/{tipId}/refund")
+    public ApiResponse<TipRecord> refund(@PathVariable long tipId,
+                                         @RequestBody RefundRequest req) {
+        return ApiResponse.ok(tipService.markRefunded(tipId, req.reason()));
     }
 
     @GetMapping("/limits")
