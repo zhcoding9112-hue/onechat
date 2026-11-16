@@ -87,6 +87,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的收藏' },
   },
   {
+    path: '/me/credits',
+    name: 'credits',
+    component: () => import('@/views/CreditView.vue'),
+    meta: { title: '我的元子' },
+  },
+  {
     path: '/me',
     name: 'profile',
     component: () => import('@/views/ProfileView.vue'),
@@ -154,6 +160,12 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-commission',
         component: () => import('@/admin/views/CommissionView.vue'),
         meta: { title: '分成比例' },
+      },
+      {
+        path: 'credits',
+        name: 'admin-credits',
+        component: () => import('@/admin/views/CreditView.vue'),
+        meta: { title: '元子记账' },
       },
     ],
   },

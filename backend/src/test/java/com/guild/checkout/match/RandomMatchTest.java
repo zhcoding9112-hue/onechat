@@ -1,5 +1,7 @@
 package com.guild.checkout.match;
 
+import com.guild.checkout.credit.CreditService;
+import com.guild.checkout.credit.CreditType;
 import com.guild.checkout.talent.Talent;
 import com.guild.checkout.talent.admin.TalentAdminService;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 随机匹配（tasks 4.1 - 4.5）。
+ *
+ * 券包要到第 7 组才存在，4.5 的「券包不变」在那一组的用例里覆盖。
  */
 @SpringBootTest
 @Transactional
@@ -29,6 +33,7 @@ class RandomMatchTest {
     @Autowired private RandomMatchService matchService;
     @Autowired private TalentAdminService talentAdminService;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private CreditService creditService;
 
     private static RandomMatchService.Criteria any() {
         return new RandomMatchService.Criteria(null, null, false, false, List.of());
@@ -163,6 +168,21 @@ class RandomMatchTest {
                 .isEqualTo(ordersBefore);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tip_record", Long.class))
                 .isEqualTo(tipsBefore);
-        // 元子余额与券包表要到第 6、7 组才存在，届时在各自用例里再覆盖一次。
+    }
+
+    @Test
+    @DisplayName("4.5 连续 50 次匹配后元子余额与流水完全不变")
+    void 匹配不动元子余额() {
+        // 先给这位粉丝垫一个非零余额：余额恒为 0 的账户看不出「有没有被扣」
+        creditService.apply(FAN_ID, 100, CreditType.GRANT, "匹配不扣费用例的期初", FAN_ID);
+        long balanceBefore = creditService.balanceOf(FAN_ID);
+        long txBefore = creditService.countTransactions(FAN_ID);
+
+        for (int i = 0; i < 50; i++) {
+            matchService.match(FAN_ID, any());
+        }
+
+        assertThat(creditService.balanceOf(FAN_ID)).isEqualTo(balanceBefore);
+        assertThat(creditService.countTransactions(FAN_ID)).isEqualTo(txBefore);
     }
 }

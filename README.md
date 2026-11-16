@@ -242,3 +242,17 @@ openspec/           需求规格与任务
   在那里声明的 `let` 是实例私有的。需要跨实例共享的东西（如「同时只播一条试听」的登记）
   必须放进独立模块，否则代码看上去完全正确而约束根本没生效。
   本项目的试听互斥登记在 `frontend/src/utils/audioRegistry.ts`。
+- **撞唯一索引的 INSERT 会先加 S 锁，别和同行的 UPDATE 放进同一个事务**。InnoDB 里一条
+  重复键 INSERT 在报错前会对既存那行加 S 锁；若同一事务紧接着要 UPDATE 同一行（典型场景：
+  「没账户就开户，然后改余额」），持 S 锁的事务要升 X 锁，而并发线程也持着该行的 S 锁，
+  于是互相等成环。实测 16 线程并发首次变动必现 `DeadlockLoserDataAccessException`。
+  解法是把开户写成 `INSERT ... ON DUPLICATE KEY UPDATE`：冲突时直接取 X 锁，线程排队而非成环。
+  **不要**改用 `REQUIRES_NEW` 的独立事务来绕——死锁确实没了，但每个请求在变动期间同时占
+  两条连接，默认连接池大小下并发一上来就抽干（现象是 `CannotCreateTransactionException`）。
+- **余额这类不可为负的数，判断要写进 UPDATE 的 WHERE 里**。
+  `UPDATE ... SET balance = balance + #{delta} WHERE balance + #{delta} >= 0` 是单条语句，
+  MySQL 对该行当前读并持锁，并发事务排队后基于新值判断，不会超扣。
+  写成「先 SELECT 余额、应用层比较、再 UPDATE」在并发下必然超扣：两个事务都读到同样的旧值。
+  表上再加一条 CHECK 约束兜底，防止日后有人绕过服务层直接写库。
+- **MySQL 的 CHECK 违反（error 3819）不是 `DataIntegrityViolationException`**。
+  Spring 把它归到 `UncategorizedSQLException`，断言时按 `DataAccessException` 加约束名匹配。
