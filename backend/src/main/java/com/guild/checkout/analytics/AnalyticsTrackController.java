@@ -41,6 +41,8 @@ public class AnalyticsTrackController {
     public record TrackRequest(
             @NotBlank(message = "事件标识不能为空")
             @Size(max = 48) String eventKey,
+            /** 发现入口。认不出来或不传的一律按直接访问记。 */
+            @Size(max = 32) String entrySource,
             Long talentId,
             Long serviceItemId,
             Map<String, Object> props) {
@@ -53,6 +55,13 @@ public class AnalyticsTrackController {
      */
     @PostMapping("/track")
     public ApiResponse<Void> track(@Valid @RequestBody TrackRequest req) {
+        // 入口点击事件单独一条路径：它的 key 不在漏斗枚举里（见 AnalyticsService#trackEntryClick）
+        EntrySource entryClick = EntrySource.byEventKey(req.eventKey());
+        if (entryClick != null) {
+            analytics.trackEntryClick(entryClick, CurrentUserHolder.requireUserId(), req.talentId());
+            return ApiResponse.ok();
+        }
+
         EventKey key = EventKey.of(req.eventKey());
         if (key == null || !CLIENT_ALLOWED.contains(key)) {
             // 不是报错，是静默忽略：前端版本比后端新时会出现未知事件，
@@ -60,6 +69,7 @@ public class AnalyticsTrackController {
             return ApiResponse.ok();
         }
         analytics.track(AnalyticsService.Track.of(key)
+                .from(EntrySource.of(req.entrySource()))
                 .user(CurrentUserHolder.requireUserId())
                 .talent(req.talentId())
                 .serviceItem(req.serviceItemId())

@@ -1,6 +1,7 @@
 package com.guild.checkout.order;
 
 import com.guild.checkout.auth.CurrentUser;
+import com.guild.checkout.analytics.EntrySource;
 import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.common.api.ApiResponse;
 import com.guild.checkout.common.exception.NotFoundException;
@@ -48,7 +49,9 @@ public class OrderController {
             @Size(max = 64, message = "联系方式不超过 64 字符") String contact,
             @Size(max = 255, message = "备注不超过 255 字符") String remark,
             /** 使用的券，不用券不传。单笔限一张，所以这里是单值而不是数组。 */
-            Long userCouponId) {
+            Long userCouponId,
+            /** 粉丝是从哪个入口来的。认不出来的一律按直接访问记，不拒绝下单。 */
+            @Size(max = 32) String entrySource) {
     }
 
     /** 指定主播下单。 */
@@ -57,7 +60,8 @@ public class OrderController {
         long userId = CurrentUserHolder.requireUserId();
         ServiceOrder order = orderService.create(new OrderCreateCommand(
                 userId, req.talentId(), req.serviceSpecId(), req.quantity(),
-                req.contact(), req.remark(), req.userCouponId()));
+                req.contact(), req.remark(), req.userCouponId(),
+                EntrySource.of(req.entrySource())));
         return ApiResponse.ok(assembler.assemble(order, OrderViewAssembler.Viewer.FAN));
     }
 

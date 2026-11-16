@@ -13,6 +13,7 @@ import {
 import { feedApi, type CrushWallItem, type FeedPostView } from '@/api/feed'
 import FanTabBar from '@/components/FanTabBar.vue'
 import { ApiError } from '@/api/http'
+import { EntrySource, talentPath, trackEntry } from '@/api/analytics'
 
 const router = useRouter()
 
@@ -83,6 +84,12 @@ async function report(post: FeedPostView) {
   }
 }
 
+/** 心动墙与下面的动态流是两个入口，分别归因。 */
+function openWall(talentId: number) {
+  trackEntry(EntrySource.CRUSH_WALL, talentId)
+  router.push(talentPath(talentId, EntrySource.CRUSH_WALL))
+}
+
 function preview(images: string[], index: number) {
   showImagePreview({ images, startPosition: index })
 }
@@ -115,7 +122,7 @@ function timeText(iso: string) {
           v-for="w in wall"
           :key="w.talentId"
           class="wall-item"
-          @click="router.push(`/talents/${w.talentId}`)"
+          @click="openWall(w.talentId)"
         >
           <div class="wall-avatar">
             <img v-if="w.coverUrl" :src="w.coverUrl" alt="" />
@@ -134,7 +141,7 @@ function timeText(iso: string) {
 
     <div v-else class="list">
       <article v-for="p in posts" :key="p.id" class="post">
-        <header class="head" @click="router.push(`/talents/${p.talentId}`)">
+        <header class="head" @click="router.push(talentPath(p.talentId, EntrySource.FEED))">
           <div class="avatar">
             <img v-if="p.coverUrl" :src="p.coverUrl" alt="" />
             <span v-else class="fallback">{{ initial(p.nickname) }}</span>

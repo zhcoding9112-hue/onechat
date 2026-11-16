@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router'
 import { chatApi, type ChatConversationView } from '@/api/chat'
 import { useChatStore } from '@/stores/chat'
 import ChatThread from '@/components/ChatThread.vue'
+import { EntrySource, talentPath } from '@/api/analytics'
 
 const route = useRoute()
 const chat = useChatStore()
@@ -10,7 +11,7 @@ const chat = useChatStore()
 const conversationId = Number(route.params.id)
 
 function peerLink(c: ChatConversationView) {
-  return `/talents/${c.talentId}`
+  return talentPath(c.talentId, EntrySource.CHAT)
 }
 </script>
 

@@ -6,6 +6,7 @@ import AudioPreview from '@/components/AudioPreview.vue'
 import { matchApi, type MatchedTalent } from '@/api/match'
 import { homeApi, type CategoryView } from '@/api/home'
 import type { Gender } from '@/api/talent'
+import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics'
 
 const router = useRouter()
 
@@ -74,12 +75,12 @@ function initial(nickname: string) {
 
 function order() {
   if (!result.value) return
-  router.push(`/talents/${result.value.id}/order`)
+  router.push(`/talents/${result.value.id}/order?${ENTRY_QUERY}=${EntrySource.RANDOM_MATCH}`)
 }
 
 function openDetail() {
   if (!result.value) return
-  router.push(`/talents/${result.value.id}`)
+  router.push(talentPath(result.value.id, EntrySource.RANDOM_MATCH))
 }
 
 function copyHint() {

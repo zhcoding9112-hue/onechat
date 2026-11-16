@@ -184,6 +184,51 @@ public class FunnelService {
         return rows;
     }
 
+    /** 入口拆分表的一行。 */
+    public record EntryBreakdown(String source, String label, String eventKey,
+                                 Map<String, Long> uvByKey) {
+    }
+
+    /** 入口拆分的三个节点。tasks 11.4 要核对的就是这三行之和。 */
+    public static final List<EventKey> ENTRY_STEPS = List.of(
+            EventKey.VIEW_TALENT_DETAIL, EventKey.SUBMIT_ORDER, EventKey.CONFIRM_PAYMENT);
+
+    /**
+     * 按发现入口拆分漏斗。
+     *
+     * 两条必须守住的性质：
+     *
+     * 1. **全部入口都出现，没有数据的那行是零而不是不出现**。隐藏空行会让人以为
+     *    这个入口不存在，而「上线了一个月一个人没带来」恰恰是最该被看见的结论。
+     *    所以这里从枚举出发补零，而不是从查询结果出发列行。
+     *
+     * 2. **各行之和等于总数**。靠的是查询侧每人每节点只归因一次（见
+     *    {@code AnalyticsEventMapper#countByEntrySource}），这里只负责补零，不改口径。
+     */
+    public List<EntryBreakdown> byEntrySource(LocalDate from, LocalDate to) {
+        LocalDateTime start = requireRange(from, to);
+        LocalDateTime end = to.plusDays(1).atStartOfDay();
+
+        Map<String, Map<String, Long>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : eventMapper.countByEntrySource(start, end)) {
+            grouped.computeIfAbsent(String.valueOf(row.get("entrySource")), k -> new LinkedHashMap<>())
+                    .put(String.valueOf(row.get("eventKey")), toLong(row.get("uv")));
+        }
+
+        List<EntryBreakdown> rows = new ArrayList<>();
+        for (EntrySource source : EntrySource.all()) {
+            Map<String, Long> counts = grouped.getOrDefault(source.name(), Map.of());
+            Map<String, Long> filled = new LinkedHashMap<>();
+            for (EventKey key : ENTRY_STEPS) {
+                filled.put(key.name(), counts.getOrDefault(key.name(), 0L));
+            }
+            // 入口自身的点击数，与漏斗三级并列展示：点了入口却没进详情也是信息
+            filled.put(source.eventKey(), counts.getOrDefault(source.eventKey(), 0L));
+            rows.add(new EntryBreakdown(source.name(), source.label(), source.eventKey(), filled));
+        }
+        return rows;
+    }
+
     /** 按服务项目拆分。 */
     public List<Breakdown> byServiceItem(LocalDate from, LocalDate to,
                                          Map<Long, String> itemNames) {

@@ -6,12 +6,15 @@ import {
   bpText,
   durationText,
   type Breakdown,
+  type EntryBreakdown,
+  type EntryBreakdownView,
   type Overview,
 } from '@/admin/api/analytics'
 
 const overview = ref<Overview | null>(null)
 const byTalent = ref<Breakdown[]>([])
 const byService = ref<Breakdown[]>([])
+const byEntry = ref<EntryBreakdownView | null>(null)
 const loading = ref(false)
 const tab = ref('talent')
 
@@ -32,14 +35,16 @@ async function reload() {
   loading.value = true
   try {
     const [from, to] = dateRange.value ?? []
-    const [o, t, s] = await Promise.all([
+    const [o, t, s, e] = await Promise.all([
       analyticsApi.funnel(from, to),
       analyticsApi.byTalent(from, to),
       analyticsApi.byService(from, to),
+      analyticsApi.byEntry(from, to),
     ])
     overview.value = o
     byTalent.value = t
     byService.value = s
+    byEntry.value = e
   } finally {
     loading.value = false
   }
@@ -65,6 +70,38 @@ const thresholdPercent = ref(80)
 
 function asBreakdown(row: unknown): Breakdown {
   return row as Breakdown
+}
+
+function asEntry(row: unknown): EntryBreakdown {
+  return row as EntryBreakdown
+}
+
+/**
+ * 入口拆分表的行。
+ *
+ * 直接用服务端返回的 rows，不在前端过滤掉全零行——「上线一个月一个人没带来」
+ * 恰恰是最该被看见的结论，隐藏它会让人以为这个入口不存在。
+ */
+const entryRows = computed(() => byEntry.value?.rows ?? [])
+
+function entryUv(row: EntryBreakdown, key: string) {
+  return row.uvByKey?.[key] ?? 0
+}
+
+/**
+ * 合计行。取服务端算好的 totals，而不是在前端把表格列加一遍。
+ *
+ * 两边各算一次迟早会对不上——而「各行之和等于总数」正是这张表唯一有用的性质。
+ */
+function entrySummary(): string[] {
+  const view = byEntry.value
+  if (!view) return []
+  const clicks = view.rows.reduce((sum, r) => sum + entryUv(r, r.eventKey), 0)
+  return [
+    '合计',
+    String(clicks),
+    ...view.steps.map((step) => String(view.totals?.[step.eventKey] ?? 0)),
+  ]
 }
 </script>
 
@@ -162,6 +199,7 @@ function asBreakdown(row: unknown): Breakdown {
             <el-radio-group v-model="tab" size="small">
               <el-radio-button label="talent">按主播</el-radio-button>
               <el-radio-button label="service">按服务项目</el-radio-button>
+              <el-radio-button label="entry">按入口</el-radio-button>
             </el-radio-group>
           </div>
         </template>
@@ -204,6 +242,37 @@ function asBreakdown(row: unknown): Breakdown {
           </el-table-column>
         </el-table>
 
+        <template v-else-if="tab === 'entry'">
+          <el-table
+            :data="entryRows"
+            size="small"
+            show-summary
+            :summary-method="entrySummary"
+            empty-text="暂无数据"
+          >
+            <el-table-column prop="label" label="入口" min-width="120" />
+            <el-table-column label="入口点击" width="100">
+              <template #default="scope">
+                {{ entryUv(asEntry(scope.row), asEntry(scope.row).eventKey) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-for="step in byEntry?.steps ?? []"
+              :key="step.eventKey"
+              :label="step.label"
+              width="110"
+            >
+              <template #default="scope">
+                {{ entryUv(asEntry(scope.row), step.eventKey) }}
+              </template>
+            </el-table-column>
+          </el-table>
+          <p class="entry-note">
+            每人每节点只归因一次，归给该周期内最早的那条事件；所以三列之和等于总漏斗的对应级。
+            没有数据的入口照常列出并显示为 0，不隐藏。
+          </p>
+        </template>
+
         <el-table v-else :data="byService" size="small" empty-text="暂无数据">
           <el-table-column prop="name" label="服务项目" min-width="140" />
           <el-table-column label="提交订单" width="100">
@@ -243,6 +312,13 @@ function asBreakdown(row: unknown): Breakdown {
 </template>
 
 <style scoped>
+.entry-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #909399;
+}
+
 .toolbar {
   margin-bottom: 16px;
   display: flex;

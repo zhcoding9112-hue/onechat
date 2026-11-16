@@ -20,11 +20,15 @@ import { orderApi } from '@/api/order'
 import { couponApi, type CouponItem } from '@/api/coupon'
 import { ApiError } from '@/api/http'
 import { centsToYuan, formatPrice } from '@/utils/money'
+import { ENTRY_QUERY, entryFromRoute } from '@/api/analytics'
 
 const route = useRoute()
 const router = useRouter()
 
 const talentId = computed(() => Number(route.params.id))
+
+/** 入口来源：详情页用查询参数带过来；直接打开下单页的按直接访问记。 */
+const entrySource = entryFromRoute(route.query[ENTRY_QUERY])
 const detail = ref<TalentDetail | null>(null)
 const loading = ref(true)
 const submitting = ref(false)
@@ -124,6 +128,8 @@ async function submit() {
       contact: contact.value.trim(),
       remark: remark.value.trim() || undefined,
       userCouponId: chosenCouponId.value,
+      // 来源一路从详情页带到这里，在下单那一刻快照进订单
+      entrySource,
     })
     // 下单成功直接进入支付环节，少一次跳转
     await router.replace(`/orders/${order.id}/payment`)

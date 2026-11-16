@@ -7,7 +7,7 @@ import { talentApi, type TalentDetail } from '@/api/talent'
 import { chatApi } from '@/api/chat'
 import { ApiError } from '@/api/http'
 import { formatPrice } from '@/utils/money'
-import { ClientEvent, track } from '@/api/analytics'
+import { ClientEvent, ENTRY_QUERY, entryFromRoute, track } from '@/api/analytics'
 import { savePendingIntent, takePendingIntent } from '@/utils/pendingIntent'
 
 const route = useRoute()
@@ -20,6 +20,15 @@ const favoriting = ref(false)
 const opening = ref(false)
 
 const talentId = computed(() => Number(route.params.id))
+
+/**
+ * 粉丝是从哪个入口来的。
+ *
+ * 在 setup 里取一次定住，不做成 computed：下面的跳转会改路由，
+ * 而「这次进详情的来源」是进来那一刻的事实，不该随路由变化。
+ * 分享链接进来的没有这个参数，解析出来就是直接访问——11.3 要的正是这个。
+ */
+const entrySource = entryFromRoute(route.query[ENTRY_QUERY])
 
 const selectedSpec = computed(() => {
   if (!detail.value) return null
@@ -60,6 +69,7 @@ onMounted(async () => {
     track(ClientEvent.VIEW_TALENT_DETAIL, {
       talentId: talentId.value,
       serviceItemId: detail.value.services[0]?.serviceItemId,
+      entrySource,
     })
   } catch {
     failed.value = true
@@ -113,11 +123,12 @@ function order(specId?: number) {
   track(ClientEvent.CLICK_ORDER, {
     talentId: talentId.value,
     serviceItemId: detail.value?.services[0]?.serviceItemId,
+    entrySource,
   })
-  router.push({
-    path: `/talents/${talentId.value}/order`,
-    query: target === undefined ? undefined : { specId: String(target) },
-  })
+  // 来源继续往下传：真正落进订单快照是在下单页提交那一刻
+  const query: Record<string, string> = { [ENTRY_QUERY]: entrySource }
+  if (target !== undefined) query.specId = String(target)
+  router.push({ path: `/talents/${talentId.value}/order`, query })
 }
 </script>
 

@@ -47,6 +47,13 @@ public class ServiceOrder {
     private String status;
     private String contact;
     private String remark;
+    /**
+     * 下单时的发现入口快照。
+     *
+     * 与价格、分成比例同理在下单那一刻钉死：确认收款是运营在后台点的，
+     * 那一刻早已没有「粉丝是从哪个入口来的」这个上下文。
+     */
+    private String entrySource;
 
     private LocalDateTime payDeadline;
     private LocalDateTime acceptDeadline;
@@ -117,6 +124,8 @@ public class ServiceOrder {
     public void setContact(String contact) { this.contact = contact; }
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
+    public String getEntrySource() { return entrySource; }
+    public void setEntrySource(String entrySource) { this.entrySource = entrySource; }
     public LocalDateTime getPayDeadline() { return payDeadline; }
     public void setPayDeadline(LocalDateTime payDeadline) { this.payDeadline = payDeadline; }
     public LocalDateTime getAcceptDeadline() { return acceptDeadline; }

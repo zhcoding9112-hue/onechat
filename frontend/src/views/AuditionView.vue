@@ -10,6 +10,7 @@ import {
   type AuditionRequestView,
 } from '@/api/audition'
 import { ApiError } from '@/api/http'
+import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics'
 
 const router = useRouter()
 
@@ -124,7 +125,7 @@ function expiresText(iso: string) {
           v-for="t in voices"
           :key="t.id"
           class="voice"
-          @click="router.push(`/talents/${t.id}`)"
+          @click="router.push(talentPath(t.id, EntrySource.AUDITION))"
         >
           <div class="avatar">
             <img v-if="t.coverUrl" :src="t.coverUrl" alt="" />
@@ -169,7 +170,7 @@ function expiresText(iso: string) {
               <p v-if="r.message" class="msg">{{ r.message }}</p>
               <AudioPreview v-if="r.audioUrl" :url="r.audioUrl" :seconds="r.audioSeconds" />
             </div>
-            <button class="order" @click.stop="router.push(`/talents/${r.talentId}/order`)">
+            <button class="order" @click.stop="router.push(`/talents/${r.talentId}/order?${ENTRY_QUERY}=${EntrySource.AUDITION}`)">
               下单
             </button>
           </article>

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { NavBar, Empty, Skeleton } from 'vant'
 import { leaderboardApi, type BoardRow, type PeriodType } from '@/api/leaderboard'
 import { centsToYuan } from '@/utils/money'
+import { EntrySource, talentPath } from '@/api/analytics'
 
 const router = useRouter()
 
@@ -73,7 +74,7 @@ function podium() {
             :key="r.talentId"
             class="stand"
             :class="`r${r.rank}`"
-            @click="router.push(`/talents/${r.talentId}`)"
+            @click="router.push(talentPath(r.talentId, EntrySource.LEADERBOARD))"
           >
             <div class="avatar">
               <img v-if="r.coverUrl" :src="r.coverUrl" alt="" />
@@ -90,7 +91,7 @@ function podium() {
             v-for="r in rows.slice(3)"
             :key="r.talentId"
             class="row"
-            @click="router.push(`/talents/${r.talentId}`)"
+            @click="router.push(talentPath(r.talentId, EntrySource.LEADERBOARD))"
           >
             <span class="rank">{{ r.rank }}</span>
             <div class="avatar sm">

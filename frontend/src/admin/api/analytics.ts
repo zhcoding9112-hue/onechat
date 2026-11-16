@@ -32,6 +32,21 @@ export interface Breakdown {
   acceptRateBp: number | null
 }
 
+export interface EntryBreakdown {
+  source: string
+  label: string
+  /** 该入口自身的点击事件键，例如 ENTRY_POPULAR。 */
+  eventKey: string
+  uvByKey: Record<string, number>
+}
+
+export interface EntryBreakdownView {
+  steps: { eventKey: string; label: string }[]
+  rows: EntryBreakdown[]
+  /** 各入口之和。服务端就是按行加出来的，所以与表格永远对得上。 */
+  totals: Record<string, number>
+}
+
 const BASE = '/api/admin/analytics'
 
 function range(from?: string, to?: string) {
@@ -48,6 +63,8 @@ export const analyticsApi = {
     http.get<Breakdown[]>(`${BASE}/by-talent${range(from, to)}`),
   byService: (from?: string, to?: string) =>
     http.get<Breakdown[]>(`${BASE}/by-service${range(from, to)}`),
+  byEntry: (from?: string, to?: string) =>
+    http.get<EntryBreakdownView>(`${BASE}/by-entry${range(from, to)}`),
   settings: () => http.get<{ acceptRateThresholdBp: number }>(`${BASE}/settings`),
   updateThreshold: (acceptRateThresholdBp: number) =>
     http.put(`${BASE}/settings`, { acceptRateThresholdBp }),

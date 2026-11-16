@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { NavBar, Empty, Skeleton, showToast, showImagePreview } from 'vant'
 import { feedApi, type FeedCommentView, type FeedPostView } from '@/api/feed'
 import { ApiError } from '@/api/http'
+import { EntrySource, talentPath } from '@/api/analytics'
 
 const route = useRoute()
 const router = useRouter()
@@ -73,7 +74,7 @@ function timeText(iso: string) {
 
     <template v-else>
       <article class="post">
-        <header class="head" @click="router.push(`/talents/${post.talentId}`)">
+        <header class="head" @click="router.push(talentPath(post.talentId, EntrySource.FEED))">
           <div class="avatar">
             <img v-if="post.coverUrl" :src="post.coverUrl" alt="" />
             <span v-else class="fallback">{{ initial(post.nickname) }}</span>

@@ -15,6 +15,8 @@ public class AnalyticsEvent {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String eventKey;
+    /** 发现入口来源。不可为空，无来源时为 DIRECT。 */
+    private String entrySource;
     private Long userId;
     private String openId;
     private Long talentId;
@@ -29,6 +31,8 @@ public class AnalyticsEvent {
     public void setId(Long id) { this.id = id; }
     public String getEventKey() { return eventKey; }
     public void setEventKey(String eventKey) { this.eventKey = eventKey; }
+    public String getEntrySource() { return entrySource; }
+    public void setEntrySource(String entrySource) { this.entrySource = entrySource; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
     public String getOpenId() { return openId; }

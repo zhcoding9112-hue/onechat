@@ -10,6 +10,7 @@ import com.guild.checkout.settlement.SettlementService;
 import com.guild.checkout.pricing.PricingService;
 import com.guild.checkout.promotion.CouponService;
 import com.guild.checkout.analytics.AnalyticsService;
+import com.guild.checkout.analytics.EntrySource;
 import com.guild.checkout.analytics.EventKey;
 import com.guild.checkout.order.timeout.DelayQueue;
 import com.guild.checkout.order.timeout.OrderNotifier;
@@ -133,6 +134,8 @@ public class OrderService {
         order.setStatusEnum(OrderStatus.PENDING_PAYMENT);
         order.setContact(contact);
         order.setRemark(remark);
+        // 归因快照：确认收款时就没有这个上下文了
+        order.setEntrySource(command.entrySourceOrDirect().name());
         // 时限折算成绝对时间戳：之后运营改配置，这一单也沿用创建时的时限
         order.setPayDeadline(now.plusMinutes(deadlines.payMinutes()));
 
@@ -145,6 +148,7 @@ public class OrderService {
         stateService.recordCreation(order, command.fanUserId());
         payQueue.schedule(order.getId(), order.getPayDeadline());
         analytics.track(AnalyticsService.Track.of(EventKey.SUBMIT_ORDER)
+                .from(command.entrySourceOrDirect())
                 .user(command.fanUserId())
                 .talent(quote.talentId())
                 .serviceItem(quote.serviceItemId())
@@ -188,7 +192,9 @@ public class OrderService {
         payQueue.cancel(orderId);
         acceptQueue.schedule(orderId, paid.getAcceptDeadline());
         notifier.notifyPendingAccept(paid);
+        // 来源取订单上的快照，而不是「现在」——这事件是运营点出来的
         analytics.track(AnalyticsService.Track.of(EventKey.CONFIRM_PAYMENT)
+                .from(EntrySource.of(paid.getEntrySource()))
                 .user(paid.getFanUserId()).talent(paid.getTalentId())
                 .serviceItem(paid.getServiceItemId()).order(paid.getOrderRef()));
         return paid;

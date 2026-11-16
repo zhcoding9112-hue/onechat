@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NavBar, Empty, Skeleton, showToast } from 'vant'
 import { talentApi, type FavoriteItem } from '@/api/talent'
+import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics'
 
 const router = useRouter()
 const items = ref<FavoriteItem[]>([])
@@ -25,7 +26,7 @@ async function reload() {
 
 function open(item: FavoriteItem) {
   // 已下架的仍可进详情看资料，只是详情页不给下单入口
-  router.push(`/talents/${item.id}`)
+  router.push(talentPath(item.id, EntrySource.FAVORITES))
 }
 
 async function remove(item: FavoriteItem, e: Event) {
@@ -83,7 +84,7 @@ function initial(nickname: string) {
         </div>
         <div class="ops">
           <button class="unfav" @click="remove(item, $event)">取消收藏</button>
-          <button v-if="item.available" class="order" @click.stop="router.push(`/talents/${item.id}/order`)">
+          <button v-if="item.available" class="order" @click.stop="router.push(`/talents/${item.id}/order?${ENTRY_QUERY}=${EntrySource.FAVORITES}`)">
             下单
           </button>
         </div>

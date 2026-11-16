@@ -66,6 +66,40 @@ public class AnalyticsDashboardController {
         return ApiResponse.ok(funnelService.byTalent(start, end, names));
     }
 
+    /**
+     * 按发现入口拆分漏斗。
+     *
+     * 全部入口都在，没有数据的那行是零而不是不出现；三个节点的各行之和等于总数，
+     * 口径见 {@code AnalyticsEventMapper#countByEntrySource}。
+     */
+    @GetMapping("/by-entry")
+    public ApiResponse<EntryBreakdownView> byEntry(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        LocalDate end = to == null ? LocalDate.now() : to;
+        LocalDate start = from == null ? end.minusDays(6) : from;
+        List<FunnelService.EntryBreakdown> rows = funnelService.byEntrySource(start, end);
+
+        // 合计直接从拆分行加出来，而不是另跑一次总数查询：
+        // 看板上「各行之和 = 合计」必须永远成立，另跑一次查询就可能对不上
+        Map<String, Long> totals = new LinkedHashMap<>();
+        for (EventKey key : FunnelService.ENTRY_STEPS) {
+            long sum = rows.stream().mapToLong(r -> r.uvByKey().getOrDefault(key.name(), 0L)).sum();
+            totals.put(key.name(), sum);
+        }
+        List<StepMeta> steps = FunnelService.ENTRY_STEPS.stream()
+                .map(k -> new StepMeta(k.name(), k.label())).toList();
+        return ApiResponse.ok(new EntryBreakdownView(steps, rows, totals));
+    }
+
+    public record StepMeta(String eventKey, String label) {
+    }
+
+    public record EntryBreakdownView(List<StepMeta> steps,
+                                     List<FunnelService.EntryBreakdown> rows,
+                                     Map<String, Long> totals) {
+    }
+
     @GetMapping("/by-service")
     public ApiResponse<List<FunnelService.Breakdown>> byService(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

@@ -37,6 +37,8 @@ public class AnalyticsService {
     /** 一次埋点上报的全部内容。除了 key 其余都可为空。 */
     public record Track(
             EventKey key,
+            /** 发现入口。为空时写入 DIRECT——事件表里这一列永远不为空。 */
+            EntrySource entrySource,
             Long userId,
             String openId,
             Long talentId,
@@ -46,35 +48,39 @@ public class AnalyticsService {
             LocalDateTime occurredAt) {
 
         public static Track of(EventKey key) {
-            return new Track(key, null, null, null, null, null, null, null);
+            return new Track(key, null, null, null, null, null, null, null, null);
+        }
+
+        public Track from(EntrySource value) {
+            return new Track(key, value, userId, openId, talentId, serviceItemId, orderRef, props, occurredAt);
         }
 
         public Track user(Long userId) {
-            return new Track(key, userId, openId, talentId, serviceItemId, orderRef, props, occurredAt);
+            return new Track(key, entrySource, userId, openId, talentId, serviceItemId, orderRef, props, occurredAt);
         }
 
         public Track openId(String value) {
-            return new Track(key, userId, value, talentId, serviceItemId, orderRef, props, occurredAt);
+            return new Track(key, entrySource, userId, value, talentId, serviceItemId, orderRef, props, occurredAt);
         }
 
         public Track talent(Long value) {
-            return new Track(key, userId, openId, value, serviceItemId, orderRef, props, occurredAt);
+            return new Track(key, entrySource, userId, openId, value, serviceItemId, orderRef, props, occurredAt);
         }
 
         public Track serviceItem(Long value) {
-            return new Track(key, userId, openId, talentId, value, orderRef, props, occurredAt);
+            return new Track(key, entrySource, userId, openId, talentId, value, orderRef, props, occurredAt);
         }
 
         public Track order(String value) {
-            return new Track(key, userId, openId, talentId, serviceItemId, value, props, occurredAt);
+            return new Track(key, entrySource, userId, openId, talentId, serviceItemId, value, props, occurredAt);
         }
 
         public Track props(Map<String, Object> value) {
-            return new Track(key, userId, openId, talentId, serviceItemId, orderRef, value, occurredAt);
+            return new Track(key, entrySource, userId, openId, talentId, serviceItemId, orderRef, value, occurredAt);
         }
 
         public Track at(LocalDateTime value) {
-            return new Track(key, userId, openId, talentId, serviceItemId, orderRef, props, value);
+            return new Track(key, entrySource, userId, openId, talentId, serviceItemId, orderRef, props, value);
         }
     }
 
@@ -102,6 +108,9 @@ public class AnalyticsService {
     public void writeInNewTransaction(Track track) {
         AnalyticsEvent event = new AnalyticsEvent();
         event.setEventKey(track.key().name());
+        // 来源为空就落 DIRECT：这一列永远不为空，拆分表才加得起来
+        event.setEntrySource(
+                (track.entrySource() == null ? EntrySource.DIRECT : track.entrySource()).name());
         event.setUserId(track.userId());
         event.setOpenId(track.openId());
         event.setTalentId(track.talentId());
@@ -116,6 +125,32 @@ public class AnalyticsService {
                 log.warn("埋点属性序列化失败，已置空：key={}", track.key());
             }
         }
+        eventMapper.insert(event);
+    }
+
+    /**
+     * 入口被点击。
+     *
+     * 入口事件的 key 不在 {@link EventKey} 里——那个枚举是漏斗节点，顺序即漏斗顺序，
+     * 把十三个入口塞进去会让漏斗凭空多出十三级。入口自带 key（{@code ENTRY_POPULAR}
+     * 之类），单独走这条路径写入。
+     */
+    public void trackEntryClick(EntrySource source, Long userId, Long talentId) {
+        try {
+            writeEntryClick(source, userId, talentId);
+        } catch (RuntimeException ex) {
+            log.error("入口埋点写入失败，已忽略：source={} user={}", source, userId, ex);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void writeEntryClick(EntrySource source, Long userId, Long talentId) {
+        AnalyticsEvent event = new AnalyticsEvent();
+        event.setEventKey(source.eventKey());
+        event.setEntrySource(source.name());
+        event.setUserId(userId);
+        event.setTalentId(talentId);
+        event.setOccurredAt(LocalDateTime.now());
         eventMapper.insert(event);
     }
 

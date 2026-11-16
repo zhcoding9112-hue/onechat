@@ -48,10 +48,36 @@ class AnalyticsDocTest {
             if (token.equals("REQUIRES_NEW") || token.equals("COALESCE")) {
                 continue;
             }
+            // 入口来源标识与入口点击事件也是真实标识
+            if (EntrySource.byEventKey(token) != null || isEntrySource(token)) {
+                continue;
+            }
             assertThat(EventKey.of(token))
                     .as("文档提到的 %s 不是一个真实事件，可能已被删除或改名", token)
                     .isNotNull();
         }
+    }
+
+    @Test
+    @DisplayName("文档列出了全部发现入口及其来源标识")
+    void 文档覆盖全部入口() throws IOException {
+        String text = Files.readString(DOC, StandardCharsets.UTF_8);
+
+        for (EntrySource source : EntrySource.values()) {
+            assertThat(text)
+                    .as("文档缺少入口 %s（%s）", source.name(), source.label())
+                    .contains("`" + source.name() + "`")
+                    .contains(source.label());
+        }
+    }
+
+    private static boolean isEntrySource(String token) {
+        for (EntrySource s : EntrySource.values()) {
+            if (s.name().equals(token)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Test

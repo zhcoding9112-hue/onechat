@@ -75,6 +75,8 @@ export interface CreateOrderRequest {
   remark?: string
   /** 使用的券（user_coupon.id）。单笔限一张，所以是单值。 */
   userCouponId?: number | null
+  /** 粉丝是从哪个入口来的。服务端会把它快照在订单上，用于归因后续的收款事件。 */
+  entrySource?: string
 }
 
 export const orderApi = {

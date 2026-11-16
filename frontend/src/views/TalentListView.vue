@@ -6,7 +6,15 @@ import { NavBar, Empty, Skeleton } from 'vant'
 import TalentCardItem from '@/components/TalentCardItem.vue'
 import { homeApi, type CategoryView, type EntryView, type MarqueeItem, type PopularTalentView } from '@/api/home'
 import { talentApi, type TalentCard } from '@/api/talent'
-import { ClientEvent, track } from '@/api/analytics'
+import {
+  ClientEvent,
+  EntrySource,
+  ENTRY_QUERY,
+  track,
+  trackEntry,
+  talentPath,
+  type EntrySourceKey,
+} from '@/api/analytics'
 import { formatPrice } from '@/utils/money'
 
 const router = useRouter()
@@ -127,19 +135,45 @@ function onScroll(e: Event) {
 
 function pickCategory(code: string | null) {
   activeCategory.value = activeCategory.value === code ? null : code
+  if (activeCategory.value) trackEntry(EntrySource.CATEGORY_TAB)
 }
 
+/**
+ * 从主列表进详情。选中了品类就归给品类 Tab，否则归给主列表。
+ *
+ * 主列表单独算一个入口（而不是并进「直接访问」）：直接访问那一行是用来衡量
+ * 分享链接效果的，混进首页随手点开的人就没法看了。
+ */
 function open(id: number) {
-  router.push(`/talents/${id}`)
+  const from = activeCategory.value ? EntrySource.CATEGORY_TAB : EntrySource.TALENT_LIST
+  router.push(talentPath(id, from))
 }
 
-function openEntry(entry: EntryView) {
+/** 首页上通往另一个入口页的大卡：记一次入口点击，再跳过去。 */
+function goEntry(path: string, from: EntrySourceKey) {
+  trackEntry(from)
+  router.push(path)
+}
+
+/** 人气店员横滑。 */
+function openPopular(id: number) {
+  trackEntry(EntrySource.POPULAR, id)
+  router.push(talentPath(id, EntrySource.POPULAR))
+}
+
+/**
+ * 运营位跳转。目标地址是运营填的，可能指向任意页面，所以来源要**挂在 URL 上**
+ * 带过去，而不是在这里假设它一定是主播详情。
+ */
+function openEntry(entry: EntryView, from: typeof EntrySource.GRID | typeof EntrySource.BANNER) {
   if (!entry.targetUrl) return
+  trackEntry(from)
   if (/^https?:\/\//.test(entry.targetUrl)) {
     window.location.assign(entry.targetUrl)
-  } else {
-    router.push(entry.targetUrl)
+    return
   }
+  const sep = entry.targetUrl.includes('?') ? '&' : '?'
+  router.push(`${entry.targetUrl}${sep}${ENTRY_QUERY}=${from}`)
 }
 
 function initial(nickname: string) {
@@ -173,11 +207,11 @@ function initial(nickname: string) {
       目前只有随机匹配一张；心动墙落地后（第 9 组）这里会变成两张并排。
     -->
     <section class="block entries">
-      <button class="entry match" @click="router.push('/match')">
+      <button class="entry match" @click="goEntry('/match', EntrySource.RANDOM_MATCH)">
         <strong>随机匹配</strong>
         <span>不知道找谁？随机遇见一位</span>
       </button>
-      <button class="entry audition" @click="router.push('/audition')">
+      <button class="entry audition" @click="goEntry('/audition', EntrySource.AUDITION)">
         <strong>试音选人</strong>
         <span>先听声音，再决定</span>
       </button>
@@ -194,7 +228,7 @@ function initial(nickname: string) {
     <section v-if="popular.length" class="block">
       <h3 class="sec-title">人气店员</h3>
       <div class="pop-scroll">
-        <div v-for="p in popular" :key="p.id" class="pop" @click="open(p.id)">
+        <div v-for="p in popular" :key="p.id" class="pop" @click="openPopular(p.id)">
           <div class="pop-cover">
             <img v-if="p.coverUrl" :src="p.coverUrl" alt="" />
             <span v-else class="fallback">{{ initial(p.nickname) }}</span>
@@ -208,7 +242,7 @@ function initial(nickname: string) {
     <!-- 九宫格服务入口 -->
     <section v-if="grids.length" class="block">
       <div class="grid">
-        <button v-for="g in grids" :key="g.id" class="grid-item" @click="openEntry(g)">
+        <button v-for="g in grids" :key="g.id" class="grid-item" @click="openEntry(g, EntrySource.GRID)">
           <img v-if="g.imageUrl" :src="g.imageUrl" alt="" />
           <span>{{ g.title }}</span>
         </button>
@@ -217,7 +251,7 @@ function initial(nickname: string) {
 
     <!-- 运营横幅轮播 -->
     <section v-if="currentBanner" class="block">
-      <div class="banner" @click="openEntry(currentBanner)">
+      <div class="banner" @click="openEntry(currentBanner, EntrySource.BANNER)">
         <img v-if="currentBanner.imageUrl" :src="currentBanner.imageUrl" alt="" />
         <div class="banner-text">
           <strong>{{ currentBanner.title }}</strong>
