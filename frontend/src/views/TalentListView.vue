@@ -167,6 +167,17 @@ function initial(nickname: string) {
       </button>
     </section>
 
+    <!--
+      入口大卡。第 2 组实现首页时跳转目标尚不存在，故留到此处补齐。
+      目前只有随机匹配一张；心动墙落地后（第 9 组）这里会变成两张并排。
+    -->
+    <section class="block entries">
+      <button class="entry match" @click="router.push('/match')">
+        <strong>随机匹配</strong>
+        <span>不知道找谁？随机遇见一位</span>
+      </button>
+    </section>
+
     <!-- 打赏跑马灯 -->
     <section v-if="marqueeText.length" class="block marquee">
       <div class="marquee-track">
@@ -292,6 +303,39 @@ function initial(nickname: string) {
   color: var(--c-text);
   font-weight: 700;
   font-size: var(--fs-xl);
+}
+
+/* ---------- 入口大卡 ---------- */
+.entries {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.entry {
+  flex: 1;
+  border: none;
+  border-radius: var(--r-lg);
+  padding: var(--sp-5) var(--sp-4);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  cursor: pointer;
+}
+
+.entry.match {
+  background: var(--g-op-cool);
+}
+
+.entry strong {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--c-text);
+}
+
+.entry span {
+  font-size: var(--fs-sm);
+  color: var(--c-text-2);
 }
 
 /* ---------- 跑马灯 ---------- */

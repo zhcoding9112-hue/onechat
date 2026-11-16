@@ -20,6 +20,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '确认下单' },
   },
   {
+    path: '/match',
+    name: 'random-match',
+    component: () => import('@/views/MatchView.vue'),
+    meta: { title: '随机匹配' },
+  },
+  {
     path: '/orders',
     name: 'order-list',
     component: () => import('@/views/OrderListView.vue'),

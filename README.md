@@ -234,3 +234,7 @@ openspec/           需求规格与任务
   Vant 的主题变量在 `styles.css` 末尾统一映射到令牌；漏掉这层映射，改主色就只改到自己写的
   那部分样式，Vant 组件纹丝不动。衍生色（`--c-brand-deep` / `--c-brand-soft`）由
   `color-mix` 从主色派生，并保留静态兜底值供不支持 `color-mix` 的老 WebView 使用。
+- **随机类查询必须关掉 MyBatis 一级缓存**。同一个 SqlSession 内，相同语句加相同参数
+  会直接复用缓存行，`ORDER BY RAND()` 压根不会被重新执行。生产上每个请求是独立
+  session 所以不显形，但在一次事务里连续匹配会一直拿到同一个人。
+  解法是给该语句加 `@Options(flushCache = Options.FlushCachePolicy.TRUE)`。
