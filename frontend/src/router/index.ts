@@ -20,6 +20,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '确认下单' },
   },
   {
+    path: '/audition',
+    name: 'audition',
+    component: () => import('@/views/AuditionView.vue'),
+    meta: { title: '试音选人' },
+  },
+  {
     path: '/match',
     name: 'random-match',
     component: () => import('@/views/MatchView.vue'),
@@ -97,6 +103,12 @@ const routes: RouteRecordRaw[] = [
         name: 'talent-orders',
         component: () => import('@/talent/views/TalentOrdersView.vue'),
         meta: { title: '主播工作台' },
+      },
+      {
+        path: 'auditions',
+        name: 'talent-auditions',
+        component: () => import('@/talent/views/TalentAuditionView.vue'),
+        meta: { title: '试音需求' },
       },
       {
         path: 'income',

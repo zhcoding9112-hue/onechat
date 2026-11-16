@@ -176,6 +176,10 @@ function initial(nickname: string) {
         <strong>随机匹配</strong>
         <span>不知道找谁？随机遇见一位</span>
       </button>
+      <button class="entry audition" @click="router.push('/audition')">
+        <strong>试音选人</strong>
+        <span>先听声音，再决定</span>
+      </button>
     </section>
 
     <!-- 打赏跑马灯 -->
@@ -325,6 +329,10 @@ function initial(nickname: string) {
 
 .entry.match {
   background: var(--g-op-cool);
+}
+
+.entry.audition {
+  background: var(--g-op-violet);
 }
 
 .entry strong {

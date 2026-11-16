@@ -238,3 +238,7 @@ openspec/           需求规格与任务
   会直接复用缓存行，`ORDER BY RAND()` 压根不会被重新执行。生产上每个请求是独立
   session 所以不显形，但在一次事务里连续匹配会一直拿到同一个人。
   解法是给该语句加 `@Options(flushCache = Options.FlushCachePolicy.TRUE)`。
+- **`<script setup>` 的顶层不是模块作用域**。它是 setup 函数体，每个组件实例都会重新执行，
+  在那里声明的 `let` 是实例私有的。需要跨实例共享的东西（如「同时只播一条试听」的登记）
+  必须放进独立模块，否则代码看上去完全正确而约束根本没生效。
+  本项目的试听互斥登记在 `frontend/src/utils/audioRegistry.ts`。

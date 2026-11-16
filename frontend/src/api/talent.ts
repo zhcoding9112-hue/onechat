@@ -95,4 +95,6 @@ export const talentApi = {
   favorite: (id: number) => http.post<{ favorited: boolean }>(`/api/talents/${id}/favorite`),
   unfavorite: (id: number) => http.delete<{ favorited: boolean }>(`/api/talents/${id}/favorite`),
   myFavorites: () => http.get<FavoriteItem[]>('/api/me/favorites'),
+  /** 试音选人页：只含已上传试听片段的主播。 */
+  voices: () => http.get<TalentCard[]>('/api/talents/voices'),
 }

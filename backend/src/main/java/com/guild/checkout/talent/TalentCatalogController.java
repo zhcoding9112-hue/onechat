@@ -127,6 +127,30 @@ public class TalentCatalogController {
         return ApiResponse.ok(new TalentFeed(cards, result.total(), consumed < result.total()));
     }
 
+    /**
+     * 试音选人页的数据源：只返回已上传试听片段的已上架主播。
+     *
+     * 没有片段的主播在这个页面上没有任何可操作的东西，放进来只会变成
+     * 一排点不动的条目，所以在服务端就筛掉，而不是前端渲染时跳过。
+     */
+    @GetMapping("/voices")
+    public ApiResponse<List<TalentCard>> voices() {
+        List<Talent> talents = talentService.listListed().stream()
+                .filter(t -> t.getAudioUrl() != null && !t.getAudioUrl().isBlank())
+                .toList();
+        Map<Long, List<TalentTag>> tagMap = talentService.listTagsByTalents(
+                talents.stream().map(Talent::getId).toList());
+
+        return ApiResponse.ok(talents.stream()
+                .map(t -> new TalentCard(
+                        t.getId(), t.getNickname(), t.getCoverUrl(),
+                        tagNames(tagMap.get(t.getId())),
+                        Boolean.TRUE.equals(t.getOnline()),
+                        t.getAudioUrl(), t.getAudioSeconds(),
+                        t.getGender(), t.getAge(), t.getRegion(), promoTags(t)))
+                .toList());
+    }
+
     // ---------- 详情 ----------
 
     @GetMapping("/{talentId}")
