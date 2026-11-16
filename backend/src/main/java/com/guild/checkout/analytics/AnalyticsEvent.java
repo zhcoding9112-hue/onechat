@@ -1,6 +1,8 @@
 package com.guild.checkout.analytics;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
@@ -20,6 +22,7 @@ public class AnalyticsEvent {
     private String orderRef;
     private String props;
     private LocalDateTime occurredAt;
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
     public Long getId() { return id; }

@@ -1,5 +1,6 @@
 package com.guild.checkout.talent;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -38,7 +39,9 @@ public class Talent {
     /** 是否上架。未上架不出现在粉丝端列表与详情。 */
     private Boolean listed;
     private Integer sortOrder;
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 
     public Long getId() { return id; }

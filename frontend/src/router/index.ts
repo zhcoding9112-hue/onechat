@@ -87,6 +87,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '我的收藏' },
   },
   {
+    path: '/feed',
+    name: 'feed',
+    component: () => import('@/views/FeedView.vue'),
+    meta: { title: '动态广场' },
+  },
+  {
+    path: '/feed/:id',
+    name: 'feed-detail',
+    component: () => import('@/views/FeedDetailView.vue'),
+    meta: { title: '动态' },
+  },
+  {
     path: '/leaderboard',
     name: 'leaderboard',
     component: () => import('@/views/LeaderboardView.vue'),
@@ -127,6 +139,12 @@ const routes: RouteRecordRaw[] = [
         name: 'talent-auditions',
         component: () => import('@/talent/views/TalentAuditionView.vue'),
         meta: { title: '试音需求' },
+      },
+      {
+        path: 'feed',
+        name: 'talent-feed',
+        component: () => import('@/talent/views/TalentFeedView.vue'),
+        meta: { title: '我的动态' },
       },
       {
         path: 'income',
@@ -172,6 +190,12 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-commission',
         component: () => import('@/admin/views/CommissionView.vue'),
         meta: { title: '分成比例' },
+      },
+      {
+        path: 'feed',
+        name: 'admin-feed',
+        component: () => import('@/admin/views/FeedView.vue'),
+        meta: { title: '内容审核' },
       },
       {
         path: 'fan-levels',

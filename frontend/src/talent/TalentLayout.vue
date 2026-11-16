@@ -21,6 +21,7 @@ const active = computed({
   <Tabbar v-model="active" route>
     <TabbarItem name="/talent" to="/talent" icon="orders-o">接单</TabbarItem>
     <TabbarItem name="/talent/auditions" to="/talent/auditions" icon="volume-o">试音</TabbarItem>
+    <TabbarItem name="/talent/feed" to="/talent/feed" icon="photo-o">动态</TabbarItem>
     <TabbarItem name="/talent/income" to="/talent/income" icon="balance-o">收入</TabbarItem>
     <TabbarItem name="/talent/me" to="/talent/me" icon="user-o">我的</TabbarItem>
   </Tabbar>

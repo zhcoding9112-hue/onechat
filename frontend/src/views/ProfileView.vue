@@ -55,6 +55,7 @@ onMounted(async () => {
     </CellGroup>
 
     <CellGroup inset style="margin-top: 12px">
+      <Cell title="动态广场" is-link @click="router.push('/feed')" />
       <Cell title="打赏榜" is-link @click="router.push('/leaderboard')" />
       <Cell title="我的订单" is-link @click="router.push('/orders')" />
       <Cell title="我的收藏" is-link @click="router.push('/me/favorites')" />

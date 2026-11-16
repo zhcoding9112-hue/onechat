@@ -1,6 +1,8 @@
 package com.guild.checkout.tipping;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
@@ -31,7 +33,9 @@ public class TipRecord {
     /** 与订单同理：版本号必须有初值，否则乐观锁拦截器会跳过版本条件。 */
     @Version
     private Integer version = 0;
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 
     public TipStatus statusEnum() {
