@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NavBar, Empty, Skeleton, Cell, CellGroup, Tag, Button, NoticeBar } from 'vant'
+import { NavBar, Skeleton, Cell, CellGroup, Tag, Button, NoticeBar } from 'vant'
 import { http } from '@/api/http'
 import type { TipView } from '@/api/tip'
 import { formatPrice } from '@/utils/money'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,7 +44,7 @@ function formatTime(value: string | null) {
   <NavBar title="打赏详情" left-arrow @click-left="$router.back()" />
 
   <Skeleton v-if="loading" :row="5" style="padding: 16px" />
-  <Empty v-else-if="!tip" description="打赏记录不存在" />
+  <EmptyState v-else-if="!tip" description="打赏记录不存在" />
 
   <template v-else>
     <section class="amount">

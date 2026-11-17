@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NavBar, Empty, Skeleton, showToast } from 'vant'
+import { NavBar, Skeleton, showToast } from 'vant'
 import { talentApi, type FavoriteItem } from '@/api/talent'
 import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 const items = ref<FavoriteItem[]>([])
@@ -54,9 +55,9 @@ function initial(nickname: string) {
     <div v-if="loading" class="list">
       <Skeleton v-for="i in 3" :key="i" avatar :row="2" class="skeleton" />
     </div>
-    <Empty v-else-if="failed" image="network" description="加载失败" />
+    <EmptyState v-else-if="failed" image="network" description="加载失败" />
     <div v-else-if="items.length === 0" class="empty">
-      <Empty description="还没有收藏的主播" />
+      <EmptyState description="还没有收藏的主播" />
       <button class="go" @click="router.push('/')">去看看</button>
     </div>
 
@@ -145,7 +146,7 @@ function initial(nickname: string) {
   flex: none;
   border-radius: var(--r-md);
   overflow: hidden;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

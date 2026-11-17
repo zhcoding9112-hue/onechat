@@ -1,26 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  NavBar,
-  Empty,
-  Skeleton,
-  Form,
-  Field,
-  CellGroup,
-  Stepper,
-  RadioGroup,
-  Radio,
-  SubmitBar,
-  Popup,
-  showToast,
-} from 'vant'
+import { NavBar, Skeleton, Form, Field, CellGroup, Stepper, RadioGroup, Radio, SubmitBar, Popup, showToast } from 'vant'
 import { talentApi, type SpecOption, type TalentDetail } from '@/api/talent'
 import { orderApi } from '@/api/order'
 import { couponApi, type CouponItem } from '@/api/coupon'
 import { ApiError } from '@/api/http'
 import { centsToYuan, formatPrice } from '@/utils/money'
 import { ENTRY_QUERY, entryFromRoute } from '@/api/analytics'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -146,8 +134,8 @@ async function submit() {
   <NavBar title="确认下单" left-arrow @click-left="$router.back()" />
 
   <Skeleton v-if="loading" :row="5" style="padding: 16px" />
-  <Empty v-else-if="!detail" description="主播不存在" />
-  <Empty v-else-if="!detail.available" :description="detail.unavailableReason ?? '该主播暂不可约'" />
+  <EmptyState v-else-if="!detail" description="主播不存在" />
+  <EmptyState v-else-if="!detail.available" :description="detail.unavailableReason ?? '该主播暂不可约'" />
 
   <template v-else>
     <Form class="form">
@@ -283,7 +271,7 @@ async function submit() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: var(--fs-md);
   cursor: pointer;
 }
 
@@ -297,7 +285,7 @@ async function submit() {
 }
 
 .coupon-row .none {
-  color: #969799;
+  color: var(--c-text-3);
 }
 
 .sheet {
@@ -306,22 +294,22 @@ async function submit() {
 
 .sheet h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   text-align: center;
 }
 
 .sheet-tip {
   margin: 8px 0 16px;
-  font-size: 12px;
-  color: #969799;
+  font-size: var(--fs-sm);
+  color: var(--c-text-3);
   text-align: center;
 }
 
 .sheet-empty {
   margin: 16px 0 0;
-  font-size: 13px;
-  color: #969799;
+  font-size: var(--fs-sm);
+  color: var(--c-text-3);
   text-align: center;
 }
 
@@ -331,8 +319,8 @@ async function submit() {
   gap: 12px;
   width: 100%;
   border: 1px solid var(--c-border);
-  background: #fff;
-  border-radius: 10px;
+  background: var(--c-surface);
+  border-radius: var(--r-md);
   padding: 12px 14px;
   margin-bottom: 10px;
   text-align: left;
@@ -346,7 +334,7 @@ async function submit() {
 
 .opt-amount {
   flex: none;
-  font-size: 20px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   color: var(--c-price);
 }
@@ -358,12 +346,12 @@ async function submit() {
 }
 
 .opt-name {
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .opt-sub {
-  font-size: 12px;
-  color: #969799;
+  font-size: var(--fs-sm);
+  color: var(--c-text-3);
 }
 
 .group {
@@ -373,8 +361,8 @@ async function submit() {
 .group-name {
   margin: 0;
   padding: 10px 16px 4px;
-  font-size: 12px;
-  color: #969799;
+  font-size: var(--fs-sm);
+  color: var(--c-text-3);
 }
 
 .spec {
@@ -382,25 +370,25 @@ async function submit() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #f2f3f5;
+  border-bottom: 1px solid var(--c-border);
 }
 
 .spec.active {
-  background: #f7f9ff;
+  background: var(--c-brand-soft);
 }
 
 .spec-name {
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .spec-duration {
   margin-left: 8px;
-  font-size: 12px;
-  color: #969799;
+  font-size: var(--fs-sm);
+  color: var(--c-text-3);
 }
 
 .spec-price {
-  color: #ee0a24;
+  color: var(--c-price);
   font-weight: 600;
 }
 
@@ -409,13 +397,13 @@ async function submit() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .notice {
   margin: 12px 16px 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.7;
-  color: #969799;
+  color: var(--c-text-3);
 }
 </style>

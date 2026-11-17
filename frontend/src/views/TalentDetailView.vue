@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NavBar, Empty, Skeleton, NoticeBar, showToast } from 'vant'
+import { NavBar, Skeleton, NoticeBar, showToast } from 'vant'
 import AudioPreview from '@/components/AudioPreview.vue'
 import { talentApi, type TalentDetail } from '@/api/talent'
 import { chatApi } from '@/api/chat'
@@ -9,6 +9,7 @@ import { ApiError } from '@/api/http'
 import { formatPrice } from '@/utils/money'
 import { ClientEvent, ENTRY_QUERY, entryFromRoute, track } from '@/api/analytics'
 import { savePendingIntent, takePendingIntent } from '@/utils/pendingIntent'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -137,7 +138,7 @@ function order(specId?: number) {
     <NavBar title="主播" left-arrow @click-left="$router.back()" />
 
     <Skeleton v-if="loading" avatar :row="4" style="padding: 16px" />
-    <Empty v-else-if="failed || !detail" image="network" description="加载失败" />
+    <EmptyState v-else-if="failed || !detail" image="network" description="加载失败" />
 
     <template v-else>
       <!-- 封面 -->
@@ -271,7 +272,7 @@ function order(specId?: number) {
   aspect-ratio: 4 / 5;
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

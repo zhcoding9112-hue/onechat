@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NavBar, Empty, Skeleton } from 'vant'
+import { NavBar, Skeleton } from 'vant'
 import { talentChatApi, type ChatConversationView } from '@/api/chat'
 import { useTalentChatStore } from '@/stores/chat'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 const chat = useTalentChatStore()
@@ -42,8 +43,8 @@ function timeText(iso: string) {
     <NavBar title="消息" />
 
     <Skeleton v-if="loading" :row="4" style="padding: 16px" />
-    <Empty v-else-if="failed" image="network" description="加载失败" />
-    <Empty v-else-if="items.length === 0" description="还没有粉丝来聊" />
+    <EmptyState v-else-if="failed" image="network" description="加载失败" />
+    <EmptyState v-else-if="items.length === 0" description="还没有粉丝来聊" />
 
     <div v-else class="list">
       <article
@@ -102,7 +103,7 @@ function timeText(iso: string) {
   height: 46px;
   flex: none;
   border-radius: 50%;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

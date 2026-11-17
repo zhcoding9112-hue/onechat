@@ -1,19 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  NavBar,
-  Empty,
-  Skeleton,
-  Field,
-  CellGroup,
-  Button,
-  showToast,
-} from 'vant'
+import { NavBar, Skeleton, Field, CellGroup, Button, showToast } from 'vant'
 import { talentApi, type TalentDetail } from '@/api/talent'
 import { tipApi, type TipLimits } from '@/api/tip'
 import { centsToYuan, formatPrice, yuanToCents } from '@/utils/money'
 import { ApiError } from '@/api/http'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -80,8 +73,8 @@ async function submit() {
   <NavBar title="打赏" left-arrow @click-left="$router.back()" />
 
   <Skeleton v-if="loading" :row="5" style="padding: 16px" />
-  <Empty v-else-if="!detail" description="主播不存在" />
-  <Empty
+  <EmptyState v-else-if="!detail" description="主播不存在" />
+  <EmptyState
     v-else-if="!detail.available && detail.unavailableReason === '该主播暂不可约'"
     description="该主播暂不可打赏"
   />

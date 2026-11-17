@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { NavBar, Empty } from 'vant'
+import { NavBar } from 'vant'
+import EmptyState from '@/components/EmptyState.vue'
 </script>
 
 <template>
   <NavBar title="请在微信中打开" />
-  <Empty image="error" description="">
+  <EmptyState image="error">
     <template #description>
       <p class="tip-title">请在微信中打开本页面</p>
       <p class="tip-body">
@@ -12,21 +13,21 @@ import { NavBar, Empty } from 'vant'
         请回到微信，从公众号菜单或聊天中的链接进入。
       </p>
     </template>
-  </Empty>
+  </EmptyState>
 </template>
 
 <style scoped>
 .tip-title {
-  margin: 0 0 8px;
-  font-size: 16px;
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg);
   font-weight: 600;
-  color: #323233;
+  color: var(--c-text);
 }
 
 .tip-body {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.7;
-  color: #969799;
+  color: var(--c-text-3);
 }
 </style>

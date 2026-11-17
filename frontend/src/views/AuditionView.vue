@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NavBar, Empty, Skeleton, showToast, showConfirmDialog } from 'vant'
+import { NavBar, Skeleton, showToast, showConfirmDialog } from 'vant'
 import AudioPreview from '@/components/AudioPreview.vue'
 import { talentApi, type TalentCard } from '@/api/talent'
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/api/audition'
 import { ApiError } from '@/api/http'
 import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 
@@ -118,8 +119,8 @@ function expiresText(iso: string) {
       <div v-if="voicesLoading" class="list">
         <Skeleton v-for="i in 3" :key="i" avatar :row="1" class="skeleton" />
       </div>
-      <Empty v-else-if="voicesFailed" image="network" description="加载失败" />
-      <Empty v-else-if="voices.length === 0" description="还没有主播上传试听片段" />
+      <EmptyState v-else-if="voicesFailed" image="network" description="加载失败" />
+      <EmptyState v-else-if="voices.length === 0" description="还没有主播上传试听片段" />
       <div v-else class="list">
         <article
           v-for="t in voices"
@@ -155,7 +156,7 @@ function expiresText(iso: string) {
         </section>
 
         <h3 class="sec-title">应征的主播（{{ replies.length }}）</h3>
-        <Empty v-if="replies.length === 0" description="还没有主播应征，再等等" />
+        <EmptyState v-if="replies.length === 0" description="还没有主播应征，再等等" />
         <div v-else class="list">
           <article v-for="r in replies" :key="r.replyId" class="reply">
             <div class="avatar">
@@ -272,7 +273,7 @@ function expiresText(iso: string) {
   flex: none;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

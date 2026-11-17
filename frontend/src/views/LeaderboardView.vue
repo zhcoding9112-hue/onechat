@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { NavBar, Empty, Skeleton } from 'vant'
+import { NavBar, Skeleton } from 'vant'
 import { leaderboardApi, type BoardRow, type PeriodType } from '@/api/leaderboard'
 import { centsToYuan } from '@/utils/money'
 import { EntrySource, talentPath } from '@/api/analytics'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 
@@ -62,8 +63,8 @@ function podium() {
     </div>
 
     <Skeleton v-if="loading" :row="4" style="padding: 16px" />
-    <Empty v-else-if="failed" image="network" description="加载失败" />
-    <Empty v-else-if="rows.length === 0" description="这个周期还没有打赏" />
+    <EmptyState v-else-if="failed" image="network" description="加载失败" />
+    <EmptyState v-else-if="rows.length === 0" description="这个周期还没有打赏" />
 
     <template v-else>
       <!-- 前三名与其余名次同处一张卡：分成两块白底会在中间裂出一道缝 -->
@@ -184,7 +185,7 @@ function podium() {
   height: 56px;
   border-radius: 50%;
   overflow: visible;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

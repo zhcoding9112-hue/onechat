@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NavBar, Empty, Skeleton, showToast, showImagePreview } from 'vant'
+import { NavBar, Skeleton, showToast, showImagePreview } from 'vant'
 import { feedApi, type FeedCommentView, type FeedPostView } from '@/api/feed'
 import { ApiError } from '@/api/http'
 import { EntrySource, talentPath } from '@/api/analytics'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -70,7 +71,7 @@ function timeText(iso: string) {
     <NavBar title="动态" left-arrow @click-left="$router.back()" />
 
     <Skeleton v-if="loading" :row="4" style="padding: 16px" />
-    <Empty v-else-if="!post" description="动态不存在或已下架" />
+    <EmptyState v-else-if="!post" description="动态不存在或已下架" />
 
     <template v-else>
       <article class="post">
@@ -99,7 +100,7 @@ function timeText(iso: string) {
       </article>
 
       <h3 class="sec-title">评论（{{ comments.length }}）</h3>
-      <Empty v-if="comments.length === 0" description="还没有评论" />
+      <EmptyState v-if="comments.length === 0" description="还没有评论" />
       <div v-else class="comments">
         <div v-for="c in comments" :key="c.id" class="comment">
           <p class="c-text">{{ c.content }}</p>
@@ -144,7 +145,7 @@ function timeText(iso: string) {
   flex: none;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

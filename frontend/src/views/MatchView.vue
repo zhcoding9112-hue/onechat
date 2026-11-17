@@ -283,7 +283,7 @@ function copyHint() {
   aspect-ratio: 4 / 3;
   border-radius: var(--r-md);
   overflow: hidden;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

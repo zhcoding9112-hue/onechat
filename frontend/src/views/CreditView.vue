@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { NavBar, Empty, Skeleton, Loading } from 'vant'
+import { NavBar, Skeleton, Loading } from 'vant'
 import { creditApi, type CreditTransactionView } from '@/api/credit'
+import EmptyState from '@/components/EmptyState.vue'
 
 const balance = ref(0)
 const rows = ref<CreditTransactionView[]>([])
@@ -74,8 +75,8 @@ function dateText(iso: string) {
 
       <h3 class="sec-title">明细</h3>
 
-      <Empty v-if="failed" image="network" description="加载失败" />
-      <Empty v-else-if="rows.length === 0" description="还没有元子记录" />
+      <EmptyState v-if="failed" image="network" description="加载失败" />
+      <EmptyState v-else-if="rows.length === 0" description="还没有元子记录" />
 
       <div v-else class="list">
         <article v-for="r in rows" :key="r.id" class="row">

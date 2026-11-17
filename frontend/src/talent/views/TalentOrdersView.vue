@@ -1,21 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import {
-  NavBar,
-  Tabs,
-  Tab,
-  Empty,
-  Skeleton,
-  Tag,
-  Button,
-  Cell,
-  CellGroup,
-  showToast,
-  showConfirmDialog,
-} from 'vant'
+import { NavBar, Tabs, Tab, Skeleton, Tag, Button, Cell, CellGroup, showToast, showConfirmDialog } from 'vant'
 import { workspaceApi, remainingText } from '@/talent/api/workspace'
 import { statusTagType, type OrderView } from '@/api/order'
 import { formatPrice } from '@/utils/money'
+import EmptyState from '@/components/EmptyState.vue'
 
 const tab = ref(0)
 const pending = ref<OrderView[]>([])
@@ -121,7 +110,7 @@ const emptyText = computed(
   </Tabs>
 
   <Skeleton v-if="loading" :row="4" style="padding: 16px" />
-  <Empty v-else-if="currentList.length === 0" :description="emptyText" />
+  <EmptyState v-else-if="currentList.length === 0" :description="emptyText" />
 
   <div v-else class="list">
     <article v-for="o in currentList" :key="o.id" class="card">

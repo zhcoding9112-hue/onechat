@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { NavBar, Empty, Button } from 'vant'
+import { NavBar, Button } from 'vant'
 import { AUTH_ENTRY } from '@/api/http'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 
@@ -23,7 +24,7 @@ function retry() {
 
 <template>
   <NavBar title="需要微信授权" />
-  <Empty image="error" description="">
+  <EmptyState image="error">
     <template #description>
       <p class="tip-title">还没有完成微信授权</p>
       <p class="tip-body">
@@ -31,7 +32,7 @@ function retry() {
         查看订单与联系主播。
       </p>
     </template>
-  </Empty>
+  </EmptyState>
   <div class="actions">
     <Button type="primary" block round @click="retry">重新授权</Button>
   </div>
@@ -39,20 +40,20 @@ function retry() {
 
 <style scoped>
 .tip-title {
-  margin: 0 0 8px;
-  font-size: 16px;
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg);
   font-weight: 600;
-  color: #323233;
+  color: var(--c-text);
 }
 
 .tip-body {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.7;
-  color: #969799;
+  color: var(--c-text-3);
 }
 
 .actions {
-  padding: 8px 16px 24px;
+  padding: var(--sp-2) var(--sp-4) var(--sp-6);
 }
 </style>

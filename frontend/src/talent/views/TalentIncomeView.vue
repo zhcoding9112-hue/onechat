@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { NavBar, Empty, Skeleton, Cell, CellGroup, NoticeBar } from 'vant'
+import { NavBar, Skeleton, Cell, CellGroup, NoticeBar } from 'vant'
 import { workspaceApi, type IncomeView } from '@/talent/api/workspace'
 import { formatPrice } from '@/utils/money'
+import EmptyState from '@/components/EmptyState.vue'
 
 const income = ref<IncomeView | null>(null)
 const loading = ref(true)
@@ -63,7 +64,7 @@ function formatTime(value: string | null) {
       </Cell>
     </CellGroup>
 
-    <Empty v-if="income.entries.length === 0" description="还没有已完成的订单" />
+    <EmptyState v-if="income.entries.length === 0" description="还没有已完成的订单" />
   </template>
 </template>
 

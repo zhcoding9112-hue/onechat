@@ -1,5 +1,16 @@
+<!--
+  默认头像。自制，不来自任何第三方素材库。
+  配色取自 styles.css 里的 --g-avatar 与 --c-offline：写成字面量是因为
+  这个文件会被 <img src> 直接引用，拿不到页面上的 CSS 变量。
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="默认头像">
-  <circle cx="48" cy="48" r="48" fill="#ebedf0"/>
-  <circle cx="48" cy="38" r="16" fill="#c8c9cc"/>
-  <path d="M16 88a32 32 0 0 1 64 0z" fill="#c8c9cc"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#e7eef0"/>
+      <stop offset="1" stop-color="#dbe4e8"/>
+    </linearGradient>
+  </defs>
+  <circle cx="48" cy="48" r="48" fill="url(#bg)"/>
+  <circle cx="48" cy="39" r="15" fill="#fff" opacity="0.85"/>
+  <path d="M19 86a29 29 0 0 1 58 0z" fill="#fff" opacity="0.85"/>
 </svg>

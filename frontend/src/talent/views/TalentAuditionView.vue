@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Empty, Skeleton, showToast, showConfirmDialog } from 'vant'
+import { Skeleton, showToast, showConfirmDialog } from 'vant'
 import { auditionApi, type AuditionRequestView } from '@/api/audition'
 import { ApiError } from '@/api/http'
+import EmptyState from '@/components/EmptyState.vue'
 
 const requests = ref<AuditionRequestView[]>([])
 const loading = ref(true)
@@ -65,8 +66,8 @@ function expiresText(iso: string) {
     <div v-if="loading" class="list">
       <Skeleton v-for="i in 2" :key="i" :row="2" class="skeleton" />
     </div>
-    <Empty v-else-if="failed" image="network" description="加载失败" />
-    <Empty v-else-if="requests.length === 0" description="暂时没有开放中的试音需求" />
+    <EmptyState v-else-if="failed" image="network" description="加载失败" />
+    <EmptyState v-else-if="requests.length === 0" description="暂时没有开放中的试音需求" />
 
     <div v-else class="list">
       <article v-for="r in requests" :key="r.id" class="card">

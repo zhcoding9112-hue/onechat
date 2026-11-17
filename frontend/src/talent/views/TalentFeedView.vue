@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Empty, Skeleton, showToast } from 'vant'
+import { Skeleton, showToast } from 'vant'
 import { talentFeedApi, type FeedPostView } from '@/api/feed'
 import { ApiError } from '@/api/http'
+import EmptyState from '@/components/EmptyState.vue'
 
 const posts = ref<FeedPostView[]>([])
 const loading = ref(true)
@@ -104,7 +105,7 @@ async function publish() {
 
     <h3 class="sec-title">我发过的</h3>
     <Skeleton v-if="loading" :row="3" />
-    <Empty v-else-if="posts.length === 0" description="还没有发过动态" />
+    <EmptyState v-else-if="posts.length === 0" description="还没有发过动态" />
     <div v-else class="list">
       <article v-for="p in posts" :key="p.id" class="post">
         <p v-if="p.content" class="content">{{ p.content }}</p>

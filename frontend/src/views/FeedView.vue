@@ -1,19 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  NavBar,
-  Empty,
-  Skeleton,
-  Loading,
-  showToast,
-  showConfirmDialog,
-  showImagePreview,
-} from 'vant'
+import { NavBar, Skeleton, Loading, showToast, showConfirmDialog, showImagePreview } from 'vant'
 import { feedApi, type CrushWallItem, type FeedPostView } from '@/api/feed'
 import FanTabBar from '@/components/FanTabBar.vue'
 import { ApiError } from '@/api/http'
 import { EntrySource, talentPath, trackEntry } from '@/api/analytics'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 
@@ -136,8 +129,8 @@ function timeText(iso: string) {
     </section>
 
     <Skeleton v-if="loading" :row="4" style="padding: 16px" />
-    <Empty v-else-if="failed" image="network" description="加载失败" />
-    <Empty v-else-if="posts.length === 0" description="还没有动态" />
+    <EmptyState v-else-if="failed" image="network" description="加载失败" />
+    <EmptyState v-else-if="posts.length === 0" description="还没有动态" />
 
     <div v-else class="list">
       <article v-for="p in posts" :key="p.id" class="post">
@@ -233,7 +226,7 @@ function timeText(iso: string) {
   height: 60px;
   border-radius: 50%;
   overflow: visible;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -303,7 +296,7 @@ function timeText(iso: string) {
   flex: none;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;

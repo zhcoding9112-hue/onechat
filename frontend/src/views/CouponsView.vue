@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { NavBar, Empty, Skeleton } from 'vant'
+import { NavBar, Skeleton } from 'vant'
 import { couponApi, type CouponBucket, type CouponItem } from '@/api/coupon'
 import { centsToYuan } from '@/utils/money'
+import EmptyState from '@/components/EmptyState.vue'
 
 const items = ref<CouponItem[]>([])
 const loading = ref(true)
@@ -54,8 +55,8 @@ function dateText(iso: string) {
     </div>
 
     <Skeleton v-if="loading" :row="3" style="padding: 16px" />
-    <Empty v-else-if="failed" image="network" description="加载失败" />
-    <Empty v-else-if="shown.length === 0" :description="`没有${TABS.find((t) => t.key === tab)?.label}的券`" />
+    <EmptyState v-else-if="failed" image="network" description="加载失败" />
+    <EmptyState v-else-if="shown.length === 0" :description="`没有${TABS.find((t) => t.key === tab)?.label}的券`" />
 
     <div v-else class="list">
       <article

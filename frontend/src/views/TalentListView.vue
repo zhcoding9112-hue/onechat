@@ -2,7 +2,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import FanTabBar from '@/components/FanTabBar.vue'
-import { NavBar, Empty, Skeleton } from 'vant'
+import { NavBar, Skeleton } from 'vant'
 import TalentCardItem from '@/components/TalentCardItem.vue'
 import { homeApi, type CategoryView, type EntryView, type MarqueeItem, type PopularTalentView } from '@/api/home'
 import { talentApi, type TalentCard } from '@/api/talent'
@@ -16,6 +16,7 @@ import {
   type EntrySourceKey,
 } from '@/api/analytics'
 import { formatPrice } from '@/utils/money'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 
@@ -280,8 +281,8 @@ function initial(nickname: string) {
       <div v-if="feedLoading" class="list">
         <Skeleton v-for="i in 3" :key="i" avatar :row="2" class="skeleton" />
       </div>
-      <Empty v-else-if="feedFailed" image="network" description="加载失败，请下拉重试" />
-      <Empty v-else-if="feed.length === 0" description="该条件下暂时没有主播" />
+      <EmptyState v-else-if="feedFailed" image="network" description="加载失败，请下拉重试" />
+      <EmptyState v-else-if="feed.length === 0" description="该条件下暂时没有主播" />
       <div v-else class="list">
         <TalentCardItem v-for="t in feed" :key="t.id" :talent="t" @click="open(t.id)" />
         <p v-if="!feedHasMore" class="end">没有更多了 · 共 {{ feedTotal }} 位</p>
@@ -445,7 +446,7 @@ function initial(nickname: string) {
   height: 84px;
   border-radius: var(--r-md);
   overflow: hidden;
-  background: linear-gradient(150deg, #e7eef0, #dbe4e8);
+  background: var(--g-avatar);
   display: flex;
   align-items: center;
   justify-content: center;
