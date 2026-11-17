@@ -57,7 +57,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 集成验收（tasks 第 14 组）。
+ * 集成验收（add-private-checkout-mvp 的 tasks 第 14 组）。
+ *
+ * 本仓库里有两份第 14 组：这一份属于上一个 change，撮合平台改版那一份在
+ * {@link MarketplaceAcceptanceTest}。两边的任务号各自对应各自的 tasks.md，
+ * 不要按编号互相对照。
  *
  * 每个测试走通一条完整链路，全部经过真实 HTTP 接口，不走捷径调 service。
  * 这些测试是「系统作为一个整体是否成立」的最后一道检查。
