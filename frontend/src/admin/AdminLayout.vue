@@ -60,6 +60,7 @@ function go(path: string) {
         <el-menu-item index="/admin/fan-levels">粉丝等级</el-menu-item>
         <el-menu-item index="/admin/home-entries">首页运营位</el-menu-item>
         <el-menu-item index="/admin/feed">内容审核</el-menu-item>
+        <el-menu-item index="/admin/survey">满意度回访</el-menu-item>
         <el-menu-item index="/admin/chat">会话查询</el-menu-item>
       </el-menu>
       <span class="admin-user">

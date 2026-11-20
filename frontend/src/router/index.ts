@@ -240,6 +240,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '内容审核' },
       },
       {
+        path: 'survey',
+        name: 'admin-survey',
+        component: () => import('@/admin/views/SurveyView.vue'),
+        meta: { title: '满意度回访' },
+      },
+      {
         path: 'chat',
         name: 'admin-chat',
         component: () => import('@/admin/views/ChatView.vue'),
