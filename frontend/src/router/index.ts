@@ -240,6 +240,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '粉丝等级' },
       },
       {
+        path: 'tips',
+        name: 'admin-tips',
+        component: () => import('@/admin/views/TipView.vue'),
+        meta: { title: '打赏管理' },
+      },
+      {
         path: 'coupons',
         name: 'admin-coupons',
         component: () => import('@/admin/views/CouponView.vue'),

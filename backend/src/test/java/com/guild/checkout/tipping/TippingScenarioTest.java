@@ -343,7 +343,111 @@ class TippingScenarioTest {
                 .andExpect(status().isForbidden());
     }
 
+    // ===== 运营后台的打赏管理（tasks 补页面时新增） =====
+
+    @Test
+    @DisplayName("Scenario: 运营列表 — 带主播与粉丝昵称，不是只有 id")
+    void 运营列表带昵称() throws Exception {
+        JsonNode tip = create(5000, "谢谢你的陪伴");
+
+        JsonNode list = dataOf(mockMvc.perform(
+                get("/api/admin/tips?status=PENDING_PAYMENT").session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        JsonNode row = findById(list, tip.get("id").asLong());
+        assertThat(row.get("talentNickname").asText()).isEqualTo("小雨");
+        // 粉丝昵称取自 app_user，没昵称时由 UserDisplay 补占位，不应为空
+        assertThat(row.get("fanNickname").asText()).isNotBlank();
+        assertThat(row.get("statusLabel").asText()).isEqualTo("待支付");
+        assertThat(row.get("message").asText()).isEqualTo("谢谢你的陪伴");
+        assertThat(row.get("guildCents").asLong() + row.get("talentCents").asLong())
+                .as("分成之和等于打赏金额")
+                .isEqualTo(row.get("amountCents").asLong());
+    }
+
+    @Test
+    @DisplayName("Scenario: 取消未收款的打赏 — 转为已取消，原因留痕")
+    void 取消未收款的打赏() throws Exception {
+        long tipId = create(5000, null).get("id").asLong();
+
+        mockMvc.perform(put("/api/admin/tips/" + tipId + "/cancel").session(operator)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"粉丝发起后一直未付款\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+
+        TipRecord stored = tipMapper.selectById(tipId);
+        assertThat(stored.getCloseReason()).isEqualTo("粉丝发起后一直未付款");
+        assertThat(stored.getClosedAt()).isNotNull();
+        assertThat(stored.getPaidCents()).as("没收过款就不该有实收金额").isNull();
+    }
+
+    @Test
+    @DisplayName("Scenario: 取消原因为空 — 拒绝")
+    void 取消原因必填() throws Exception {
+        long tipId = create(5000, null).get("id").asLong();
+
+        mockMvc.perform(put("/api/admin/tips/" + tipId + "/cancel").session(operator)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(tipMapper.selectById(tipId).statusEnum()).isEqualTo(TipStatus.PENDING_PAYMENT);
+    }
+
+    @Test
+    @DisplayName("Scenario: 已收款的打赏不能取消 — 该走退款")
+    void 已收款不能取消() throws Exception {
+        long tipId = create(5000, null).get("id").asLong();
+        confirm(tipId, 5000);
+
+        mockMvc.perform(put("/api/admin/tips/" + tipId + "/cancel").session(operator)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"手滑\"}"))
+                .andExpect(status().isConflict());
+
+        assertThat(tipMapper.selectById(tipId).statusEnum()).isEqualTo(TipStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("Scenario: 粉丝调取消接口 — 无权限")
+    void 粉丝不能取消打赏() throws Exception {
+        long tipId = create(5000, null).get("id").asLong();
+
+        mockMvc.perform(put("/api/admin/tips/" + tipId + "/cancel").session(fan)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"我不想打赏了\"}"))
+                .andExpect(status().isForbidden());
+
+        assertThat(tipMapper.selectById(tipId).statusEnum()).isEqualTo(TipStatus.PENDING_PAYMENT);
+    }
+
+    @Test
+    @DisplayName("Scenario: 同一笔被确认两次 — 第二次拒绝，不重复入账")
+    void 重复确认被拒() throws Exception {
+        long tipId = create(5000, null).get("id").asLong();
+        confirm(tipId, 5000);
+
+        mockMvc.perform(put("/api/admin/tips/" + tipId + "/confirm").session(operator)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paidCents\":5000}"))
+                .andExpect(status().isConflict());
+
+        TipRecord stored = tipMapper.selectById(tipId);
+        assertThat(stored.getPaidCents()).isEqualTo(5000);
+    }
+
     // ---------- 辅助 ----------
+
+    private JsonNode findById(JsonNode list, long id) {
+        for (JsonNode node : list) {
+            if (node.get("id").asLong() == id) {
+                return node;
+            }
+        }
+        throw new AssertionError("列表里没有 id=" + id);
+    }
+
 
     private JsonNode create(long amountCents, String message) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/tips").session(fan)
