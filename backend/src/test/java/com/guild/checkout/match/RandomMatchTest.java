@@ -50,9 +50,24 @@ class RandomMatchTest {
         return t;
     }
 
+    /**
+     * 本类的几条用例需要「候选充足」。
+     *
+     * 此前它们不自己造数据，直接依赖开发库里恰好有一堆已上架主播——
+     * 而那些主播其实是别的测试漏下来的垃圾数据。清掉垃圾数据后这几条立刻红了，
+     * 也就是说它们一直是靠巧合绿的：换一台干净的机器、或者新同事第一次跑，都会失败。
+     */
+    private void givenEnoughCandidates(int n) {
+        for (int i = 0; i < n; i++) {
+            newListed("匹配候选" + i + "_" + System.nanoTime(), i % 2 == 0 ? "FEMALE" : "MALE", false);
+        }
+    }
+
     @Test
     @DisplayName("4.1 连续 100 次匹配的结果既不固定也不是轮询")
     void 连续匹配不是固定顺序或轮询() {
+        givenEnoughCandidates(6);
+
         List<Long> draws = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
             matchService.match(FAN_ID, any()).ifPresent(t -> draws.add(t.getId()));
@@ -127,6 +142,8 @@ class RandomMatchTest {
     @Test
     @DisplayName("4.4 连续换五位，候选充足时互不相同")
     void 连续换五位互不相同() {
+        givenEnoughCandidates(6);
+
         List<Long> seen = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             Optional<Talent> hit = matchService.match(FAN_ID,

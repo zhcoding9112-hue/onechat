@@ -3,8 +3,15 @@
 --
 -- 用法：先只跑「盘点」那一段看数字，确认无误后再跑「清理」那一段。
 --
---   mysql -u root private_checkout < scripts/cleanup-test-data.sql        # 只盘点
---   mysql -u root private_checkout -e "SET @CONFIRM='YES'; SOURCE scripts/cleanup-test-data.sql"
+--   # 只盘点，不删任何东西
+--   mysql -u root private_checkout < scripts/cleanup-test-data.sql
+--
+--   # 真的执行清理
+--   { echo "SET @CONFIRM='YES';"; cat scripts/cleanup-test-data.sql; } \
+--     | mysql -u root private_checkout
+--
+-- 注意 SOURCE 是 mysql 客户端的内建命令，不能跟在 -e 后面用，只能走标准输入；
+-- 所以这里是把 SET 与脚本内容拼起来一起喂给客户端。
 --
 -- 为什么会有这么多测试数据：有几个测试类刻意不加 @Transactional（它们要验的
 -- 就是真实提交下的行为，套一层测试事务什么也验不到），于是造出来的数据不回滚。
@@ -111,6 +118,25 @@ DELETE FROM talent_media WHERE @go = 1 AND talent_id IN (SELECT id FROM tmp_test
 DELETE FROM talent       WHERE @go = 1 AND id IN (SELECT id FROM tmp_test_talent);
 DELETE FROM app_user     WHERE @go = 1 AND id IN (SELECT id FROM tmp_test_user);
 
+-- 扫一遍孤儿行：引用的主播或档位已经不在了的价格行。
+-- 上面按「测试主播」「测试项目」删，删不掉那些指向更早就消失的主播的残留——
+-- 开发库里就有一条 talent_id = 1 的价格行，而 id 1 的主播早已不存在。
+DELETE p FROM talent_price p
+LEFT JOIN talent t ON t.id = p.talent_id
+LEFT JOIN service_spec s ON s.id = p.service_spec_id
+WHERE @go = 1 AND (t.id IS NULL OR s.id IS NULL);
+
+DELETE x FROM talent_tag x LEFT JOIN talent t ON t.id = x.talent_id
+WHERE @go = 1 AND t.id IS NULL;
+DELETE x FROM talent_media x LEFT JOIN talent t ON t.id = x.talent_id
+WHERE @go = 1 AND t.id IS NULL;
+DELETE x FROM service_spec x LEFT JOIN service_item i ON i.id = x.service_item_id
+WHERE @go = 1 AND i.id IS NULL;
+DELETE x FROM user_coupon x LEFT JOIN app_user u ON u.id = x.user_id
+WHERE @go = 1 AND u.id IS NULL;
+DELETE x FROM crush_wall_pick x LEFT JOIN talent t ON t.id = x.talent_id
+WHERE @go = 1 AND t.id IS NULL;
+
 DROP TEMPORARY TABLE IF EXISTS tmp_test_talent;
 DROP TEMPORARY TABLE IF EXISTS tmp_test_user;
 DROP TEMPORARY TABLE IF EXISTS tmp_test_item;
@@ -118,7 +144,13 @@ DROP TEMPORARY TABLE IF EXISTS tmp_test_item;
 -- ---------------------------------------------------------------------------
 -- 三、清理后复核
 -- ---------------------------------------------------------------------------
-SELECT 'talent 剩余' AS 表, COUNT(*) AS n FROM talent
+SELECT 'talent_price 孤儿（应为 0）' AS 表, COUNT(*) AS n
+FROM talent_price p
+LEFT JOIN talent t ON t.id = p.talent_id
+LEFT JOIN service_spec s ON s.id = p.service_spec_id
+WHERE t.id IS NULL OR s.id IS NULL
+UNION ALL
+SELECT 'talent 剩余', COUNT(*) FROM talent
 UNION ALL SELECT 'talent 已上架', COUNT(*) FROM talent WHERE listed = 1
 UNION ALL SELECT 'service_item 剩余', COUNT(*) FROM service_item
 UNION ALL SELECT 'app_user 剩余', COUNT(*) FROM app_user

@@ -140,10 +140,20 @@ class HomeBlocksTest {
     @Test
     @DisplayName("2.8 分页不重不漏，且总数与分页无关")
     void 分页不重不漏() {
+        // 自己造够两页的数据。此前这条用例直接翻开发库里现成的主播，
+        // 而那些主播是别的测试漏下来的垃圾数据；清掉之后只剩两位，
+        // 第二页为空，断言连「不重」都无从谈起（AssertJ 对空集合直接抛参数异常）。
+        for (int i = 0; i < 6; i++) {
+            newListedTalent("分页用主播" + i + "_" + System.nanoTime(), null);
+        }
+
         TalentService.TalentPage first = talentService.listListed(null, null, null, 0, 5);
         TalentService.TalentPage second = talentService.listListed(null, null, null, 1, 5);
 
         assertThat(first.total()).isEqualTo(second.total());
+        assertThat(first.items()).hasSize(5);
+        assertThat(second.items()).isNotEmpty();
+
         List<Long> firstIds = first.items().stream().map(Talent::getId).toList();
         List<Long> secondIds = second.items().stream().map(Talent::getId).toList();
         assertThat(firstIds).doesNotContainAnyElementsOf(secondIds);
