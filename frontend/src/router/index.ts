@@ -204,6 +204,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '收款与对账' },
       },
       {
+        path: 'orders',
+        name: 'admin-orders',
+        component: () => import('@/admin/views/OrderView.vue'),
+        meta: { title: '订单管理' },
+      },
+      {
         path: 'talents',
         name: 'admin-talents',
         component: () => import('@/admin/views/TalentView.vue'),
