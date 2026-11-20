@@ -9,6 +9,8 @@ import com.guild.checkout.order.OrderOperatorType;
 import com.guild.checkout.order.OrderService;
 import com.guild.checkout.order.OrderStateService;
 import com.guild.checkout.order.OrderStatus;
+import com.guild.checkout.order.OrderView;
+import com.guild.checkout.order.OrderViewAssembler;
 import com.guild.checkout.order.ServiceOrder;
 import com.guild.checkout.order.ServiceOrderMapper;
 import com.guild.checkout.payment.ManualPaymentProvider;
@@ -49,23 +51,32 @@ public class PaymentAdminController {
     private final ServiceOrderMapper orderMapper;
     private final OrderService orderService;
     private final OrderStateService stateService;
+    private final OrderViewAssembler assembler;
 
     public PaymentAdminController(PaymentService paymentService,
                                   PaymentSettingMapper settingMapper,
                                   PaymentProofMapper proofMapper,
                                   ServiceOrderMapper orderMapper,
                                   OrderService orderService,
-                                  OrderStateService stateService) {
+                                  OrderStateService stateService,
+                                  OrderViewAssembler assembler) {
         this.paymentService = paymentService;
         this.settingMapper = settingMapper;
         this.proofMapper = proofMapper;
         this.orderMapper = orderMapper;
         this.orderService = orderService;
         this.stateService = stateService;
+        this.assembler = assembler;
     }
 
     // ---------- 待对账 ----------
 
+    /**
+     * 待对账的一行。
+     *
+     * 除了金额与凭证，还带上「这笔钱是买什么的」：运营要判断该确认还是该驳回，
+     * 光有订单号和金额不够——驳回时得在原因里说清是哪位主播的哪个服务。
+     */
     public record ReconcileItem(
             Long orderId,
             String orderRef,
@@ -73,7 +84,16 @@ public class PaymentAdminController {
             String status,
             String statusLabel,
             LocalDateTime createdAt,
-            List<String> proofUrls) {
+            List<String> proofUrls,
+            Long talentId,
+            String talentNickname,
+            String serviceItemName,
+            String serviceSpecName,
+            int quantity,
+            long originalCents,
+            long couponDiscountCents,
+            String remark,
+            LocalDateTime payDeadline) {
     }
 
     /** 待对账列表：已上传凭证等待核对的订单，最早的排在前面。 */
@@ -92,11 +112,18 @@ public class PaymentAdminController {
                                 .orderByAsc(PaymentProof::getId))
                 .stream().collect(Collectors.groupingBy(PaymentProof::getOrderId));
 
-        return ApiResponse.ok(orders.stream().map(o -> new ReconcileItem(
-                o.getId(), o.getOrderRef(), o.getPayableCents(),
-                o.statusEnum().name(), o.statusEnum().label(), o.getCreatedAt(),
-                proofs.getOrDefault(o.getId(), List.of()).stream().map(PaymentProof::getUrl).toList()
-        )).toList());
+        return ApiResponse.ok(orders.stream().map(o -> {
+            // 主播昵称等上下文沿用订单视图的装配逻辑，避免这里重复一套取名规则
+            OrderView view = assembler.assemble(o, OrderViewAssembler.Viewer.OPERATOR);
+            return new ReconcileItem(
+                    o.getId(), o.getOrderRef(), o.getPayableCents(),
+                    o.statusEnum().name(), o.statusEnum().label(), o.getCreatedAt(),
+                    proofs.getOrDefault(o.getId(), List.of()).stream().map(PaymentProof::getUrl).toList(),
+                    view.talentId(), view.talentNickname(),
+                    view.serviceItemName(), view.serviceSpecName(), view.quantity(),
+                    view.originalCents(), view.couponDiscountCents(),
+                    view.remark(), view.payDeadline());
+        }).toList());
     }
 
     // ---------- 确认与驳回 ----------

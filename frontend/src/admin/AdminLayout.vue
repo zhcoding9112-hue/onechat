@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { fetchCurrentUser, type CurrentUser } from '@/api/session'
@@ -10,11 +10,17 @@ const me = ref<CurrentUser | null>(null)
 const loading = ref(true)
 
 onMounted(async () => {
+  // 解除粉丝端 750px 版心，详见 styles.css 里 html[data-app='admin'] 的说明
+  document.documentElement.dataset.app = 'admin'
   try {
     me.value = await fetchCurrentUser()
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  delete document.documentElement.dataset.app
 })
 
 function go(path: string) {
@@ -36,6 +42,7 @@ function go(path: string) {
         @select="go"
       >
         <el-menu-item index="/admin/dashboard">转化看板</el-menu-item>
+        <el-menu-item index="/admin/payment">收款与对账</el-menu-item>
         <el-menu-item index="/admin/talents">主播管理</el-menu-item>
         <el-menu-item index="/admin/pricing">服务与价格</el-menu-item>
         <el-menu-item index="/admin/commission">分成比例</el-menu-item>

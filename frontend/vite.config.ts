@@ -60,6 +60,12 @@ export default defineConfig({
         target: process.env.VITE_API_TARGET ?? 'http://127.0.0.1:8080',
         changeOrigin: false,
       },
+      // 上传的文件（封面、试听、支付凭证）由后端静态目录提供，
+      // 开发期不转发的话这些图片一律 404，后台对账看不到凭证。
+      '/uploads': {
+        target: process.env.VITE_API_TARGET ?? 'http://127.0.0.1:8080',
+        changeOrigin: false,
+      },
     },
   },
 })

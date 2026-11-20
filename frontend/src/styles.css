@@ -108,6 +108,17 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/*
+ * 运营后台不受粉丝端的手机宽度约束。
+ *
+ * #app 同时包着粉丝端和后台，750px 是粉丝端的版心；后台是桌面端表格界面，
+ * 被压到 750px 后宽表格会横向滚动、右侧固定列盖住中间列。
+ * 标记由 AdminLayout 挂载时加上、卸载时去掉。
+ */
+html[data-app='admin'] #app {
+  max-width: none;
+}
+
 /* 数字一律等宽，避免金额、时长在列表里跳动 */
 .num {
   font-variant-numeric: tabular-nums;
