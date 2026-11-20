@@ -4,10 +4,15 @@ import { ElMessage } from 'element-plus'
 import { ApiError } from '@/api/http'
 import {
   talentAdminApi,
+  AUDIO_TYPES,
+  COVER_TYPES,
+  MAX_AUDIO_BYTES,
+  MAX_COVER_BYTES,
   type Gender,
   type TalentAdminView,
   type TalentProfilePayload,
 } from '@/admin/api/talent'
+import { readAudioSeconds } from '@/utils/audioDuration'
 
 /** 与后端 TalentAdminService.MAX_PROMO_TAGS 对应。前端只做输入框数量约束，真正的拒绝在后端。 */
 const MAX_PROMO_TAGS = 2
@@ -125,6 +130,141 @@ function genderLabel(g: Gender | null) {
 function asRow(row: unknown): TalentAdminView {
   return row as TalentAdminView
 }
+
+// ---------- 素材上传 ----------
+
+const media = reactive({
+  visible: false,
+  row: null as TalentAdminView | null,
+  coverUploading: false,
+  audioUploading: false,
+  /** 已选但还没上传的音频，等运营确认时长 */
+  pendingAudio: null as File | null,
+  pendingAudioName: '',
+  pendingSeconds: null as number | null,
+  /** 时长读不出来时为 true，必须手填 */
+  secondsUnknown: false,
+  detecting: false,
+})
+
+const coverInput = ref<HTMLInputElement | null>(null)
+const audioInput = ref<HTMLInputElement | null>(null)
+
+function openMedia(row: TalentAdminView) {
+  Object.assign(media, {
+    visible: true,
+    row,
+    coverUploading: false,
+    audioUploading: false,
+    pendingAudio: null,
+    pendingAudioName: '',
+    pendingSeconds: null,
+    secondsUnknown: false,
+    detecting: false,
+  })
+}
+
+/** 选中文件后先在本地挡一道，省得传完几 MB 才被后端拒绝。 */
+function precheck(file: File, types: string[], maxBytes: number, label: string): boolean {
+  if (!types.includes(file.type.toLowerCase())) {
+    ElMessage.error(`不支持的${label}格式：${file.type || '未知'}`)
+    return false
+  }
+  if (file.size > maxBytes) {
+    ElMessage.error(
+      `${label}大小 ${(file.size / 1024 / 1024).toFixed(1)} MB，超过 ${maxBytes / 1024 / 1024} MB 上限`,
+    )
+    return false
+  }
+  return true
+}
+
+async function onCoverPicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  // 先清空，否则连续选同一个文件不会再触发 change
+  input.value = ''
+  if (!file || !media.row) return
+  if (!precheck(file, COVER_TYPES, MAX_COVER_BYTES, '图片')) return
+
+  media.coverUploading = true
+  try {
+    await talentAdminApi.uploadCover(media.row.id, file)
+    ElMessage.success('封面已更新')
+    await refreshMediaRow()
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e
+  } finally {
+    media.coverUploading = false
+  }
+}
+
+async function onAudioPicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!precheck(file, AUDIO_TYPES, MAX_AUDIO_BYTES, '音频')) return
+
+  media.pendingAudio = file
+  media.pendingAudioName = file.name
+  media.pendingSeconds = null
+  media.secondsUnknown = false
+  media.detecting = true
+  try {
+    const seconds = await readAudioSeconds(file)
+    media.pendingSeconds = seconds
+    media.secondsUnknown = seconds === null
+  } finally {
+    media.detecting = false
+  }
+}
+
+async function uploadAudio() {
+  if (!media.row || !media.pendingAudio) return
+  const seconds = media.pendingSeconds
+  if (seconds === null || seconds <= 0) {
+    ElMessage.warning('请填写试听时长（秒）')
+    return
+  }
+
+  media.audioUploading = true
+  try {
+    await talentAdminApi.uploadAudio(media.row.id, media.pendingAudio, seconds)
+    ElMessage.success('试听片段已更新')
+    media.pendingAudio = null
+    media.pendingAudioName = ''
+    media.pendingSeconds = null
+    media.secondsUnknown = false
+    await refreshMediaRow()
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e
+  } finally {
+    media.audioUploading = false
+  }
+}
+
+function cancelPendingAudio() {
+  media.pendingAudio = null
+  media.pendingAudioName = ''
+  media.pendingSeconds = null
+  media.secondsUnknown = false
+}
+
+/** 上传后重新拉一遍：列表的「素材」列和弹窗里的预览都要跟着变。 */
+async function refreshMediaRow() {
+  if (!media.row) return
+  const id = media.row.id
+  await reload()
+  media.row = rows.value.find((r) => r.id === id) ?? media.row
+}
+
+function durationText(seconds: number | null) {
+  if (!seconds) return ''
+  const m = Math.floor(seconds / 60)
+  const sec = seconds % 60
+  return m > 0 ? `${m} 分 ${sec} 秒` : `${sec} 秒`
+}
 </script>
 
 <template>
@@ -180,9 +320,10 @@ function asRow(row: unknown): TalentAdminView {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="170" fixed="right">
+      <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(asRow(row))">编辑</el-button>
+          <el-button link type="primary" @click="openMedia(asRow(row))">素材</el-button>
           <el-button link type="primary" @click="toggleListed(asRow(row))">
             {{ asRow(row).listed ? '下架' : '上架' }}
           </el-button>
@@ -235,6 +376,132 @@ function asRow(row: unknown): TalentAdminView {
         <el-button type="primary" :loading="form.saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="media.visible"
+      :title="media.row ? `素材 — ${media.row.nickname}` : '素材'"
+      width="560px"
+    >
+      <template v-if="media.row">
+        <el-alert
+          v-if="media.row.listed && (!media.row.coverUrl || !media.row.audioUrl)"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="这位主播已经上架，但素材不齐，粉丝端卡片现在是留白的。"
+          style="margin-bottom: 16px"
+        />
+
+        <section class="media-block">
+          <h4>封面图</h4>
+          <div class="media-row">
+            <el-image
+              v-if="media.row.coverUrl"
+              :src="media.row.coverUrl"
+              :preview-src-list="[media.row.coverUrl]"
+              fit="cover"
+              class="cover-preview"
+              preview-teleported
+            />
+            <div v-else class="cover-preview empty">未上传</div>
+
+            <div class="media-actions">
+              <el-button
+                type="primary"
+                :loading="media.coverUploading"
+                @click="coverInput?.click()"
+              >
+                {{ media.row.coverUrl ? '更换封面' : '上传封面' }}
+              </el-button>
+              <p class="hint-block">
+                JPG / PNG / WebP，不超过 2 MB。建议竖图，粉丝端卡片按竖向裁切。
+                <br />更换后旧文件会被删除。
+              </p>
+            </div>
+          </div>
+          <input
+            ref="coverInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            class="file-input"
+            @change="onCoverPicked"
+          />
+        </section>
+
+        <el-divider />
+
+        <section class="media-block">
+          <h4>试听片段</h4>
+
+          <div v-if="media.row.audioUrl" class="current-audio">
+            <audio :src="media.row.audioUrl" controls preload="none" class="player" />
+            <span class="hint">当前时长 {{ durationText(media.row.audioSeconds) || '未知' }}</span>
+          </div>
+          <p v-else class="hint-block">未上传</p>
+
+          <div v-if="!media.pendingAudio" class="media-actions">
+            <el-button :loading="media.audioUploading" @click="audioInput?.click()">
+              {{ media.row.audioUrl ? '更换试听' : '上传试听' }}
+            </el-button>
+            <p class="hint-block">MP3 / M4A / AAC / WAV，不超过 5 MB。</p>
+          </div>
+
+          <div v-else class="pending">
+            <p class="file-name">{{ media.pendingAudioName }}</p>
+
+            <p v-if="media.detecting" class="hint-block">正在读取时长…</p>
+            <template v-else>
+              <el-alert
+                v-if="media.secondsUnknown"
+                type="warning"
+                :closable="false"
+                show-icon
+                title="读不出这个文件的时长，请自己听一遍后手动填写"
+                style="margin-bottom: 8px"
+              />
+              <div class="seconds-row">
+                <span>试听时长</span>
+                <el-input-number
+                  v-model="media.pendingSeconds"
+                  :min="1"
+                  :max="3600"
+                  controls-position="right"
+                />
+                <span class="hint">秒{{ media.pendingSeconds ? `（${durationText(media.pendingSeconds)}）` : '' }}</span>
+              </div>
+              <p class="hint-block">
+                时长是前端读出来的，后端不解析音频文件，所以这个数字直接决定粉丝端显示的秒数。
+                不对就在这里改。
+              </p>
+            </template>
+
+            <div class="media-actions">
+              <el-button
+                type="primary"
+                :loading="media.audioUploading"
+                :disabled="media.detecting"
+                @click="uploadAudio"
+              >
+                上传
+              </el-button>
+              <el-button @click="cancelPendingAudio">重选</el-button>
+            </div>
+          </div>
+
+          <input
+            ref="audioInput"
+            type="file"
+            accept="audio/mpeg,audio/mp4,audio/aac,audio/x-m4a,audio/wav,audio/x-wav,.mp3,.m4a,.aac,.wav"
+            class="file-input"
+            @change="onAudioPicked"
+          />
+        </section>
+      </template>
+
+      <template #footer>
+        <el-button type="primary" @click="media.visible = false">完成</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -261,5 +528,78 @@ function asRow(row: unknown): TalentAdminView {
   margin-left: 8px;
   color: #909399;
   font-size: 12px;
+}
+.media-block h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.media-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.cover-preview {
+  width: 96px;
+  height: 128px;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+  flex: none;
+}
+.cover-preview.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c4cc;
+  font-size: 12px;
+  background: #fafafa;
+}
+.media-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.hint-block {
+  margin: 0;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.current-audio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.player {
+  height: 32px;
+  max-width: 300px;
+}
+/* 原生 file 输入一律藏起来，由按钮触发，样式才统一 */
+.file-input {
+  display: none;
+}
+.pending {
+  background: #fafafa;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 12px;
+}
+.file-name {
+  margin: 0 0 8px;
+  font-size: 13px;
+  word-break: break-all;
+}
+.seconds-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+/* 待上传块里的两个按钮并排，外面那组（按钮 + 多行说明）才需要竖排 */
+.pending .media-actions {
+  flex-direction: row;
+  margin-top: 10px;
 }
 </style>

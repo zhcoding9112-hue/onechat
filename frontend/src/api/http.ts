@@ -20,7 +20,10 @@ export class ApiError extends Error {
 }
 
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
-  /** JSON 请求体，自动序列化并带上 Content-Type。 */
+  /**
+   * 请求体。FormData 原样发送（由浏览器自己生成 multipart 边界），
+   * 其余一律按 JSON 序列化并带上 Content-Type。
+   */
   body?: unknown
   /** 失败时是否自动弹出提示，默认 true。 */
   toastOnError?: boolean
@@ -47,18 +50,21 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
     ...rest
   } = options
 
+  const isForm = body instanceof FormData
+
   const init: RequestInit = {
     // 会话走 Cookie，必须带上凭证。
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      // multipart 的 Content-Type 必须带 boundary，手写只会写错——交给浏览器
+      ...(body === undefined || isForm ? {} : { 'Content-Type': 'application/json' }),
       ...headers,
     },
     ...rest,
   }
   if (body !== undefined) {
-    init.body = JSON.stringify(body)
+    init.body = isForm ? (body as FormData) : JSON.stringify(body)
   }
 
   let res: Response
@@ -102,6 +108,9 @@ export const http = {
   get: <T>(url: string, options?: RequestOptions) => request<T>(url, { ...options, method: 'GET' }),
   post: <T>(url: string, body?: unknown, options?: RequestOptions) =>
     request<T>(url, { ...options, method: 'POST', body }),
+  /** multipart 上传。错误处理与其余请求一致，抛 ApiError 并弹提示。 */
+  upload: <T>(url: string, form: FormData, options?: RequestOptions) =>
+    request<T>(url, { ...options, method: 'POST', body: form }),
   put: <T>(url: string, body?: unknown, options?: RequestOptions) =>
     request<T>(url, { ...options, method: 'PUT', body }),
   delete: <T>(url: string, options?: RequestOptions) =>

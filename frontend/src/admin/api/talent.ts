@@ -33,6 +33,32 @@ export interface TalentProfilePayload {
   promoTags?: string[] | null
 }
 
+/** 上传结果，与后端 TalentMediaController.UploadResult 一致。 */
+export interface MediaUploadResult {
+  url: string
+  sizeBytes: number
+  contentType: string
+}
+
+/*
+ * 下面四个限制与后端 TalentMediaController 的常量一一对应。
+ * 这里重复一份是为了在选中文件的瞬间就拦住，而不是让运营传完 20MB 再看到报错；
+ * 真正说了算的仍然是后端——改限制时两边都要改。
+ */
+export const MAX_COVER_BYTES = 2 * 1024 * 1024
+export const MAX_AUDIO_BYTES = 5 * 1024 * 1024
+export const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+export const AUDIO_TYPES = [
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/aac',
+  'audio/x-m4a',
+  'audio/m4a',
+  'audio/wav',
+  'audio/x-wav',
+]
+
 const BASE = '/api/admin/talents'
 
 export const talentAdminApi = {
@@ -45,4 +71,21 @@ export const talentAdminApi = {
     http.put<TalentAdminView>(`${BASE}/${id}/listed/${listed}`),
   setTags: (id: number, tags: string[]) =>
     http.put<TalentAdminView>(`${BASE}/${id}/tags`, { tags }),
+
+  /** 上传封面图。成功后旧封面文件由后端删除。 */
+  uploadCover: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return http.upload<MediaUploadResult>(`${BASE}/${id}/media/cover`, form)
+  },
+
+  /**
+   * 上传试听片段。时长必须由前端读出后一并提交——后端不解析音频文件。
+   */
+  uploadAudio: (id: number, file: File, seconds: number) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('seconds', String(seconds))
+    return http.upload<MediaUploadResult>(`${BASE}/${id}/media/audio`, form)
+  },
 }
