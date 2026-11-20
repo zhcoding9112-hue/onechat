@@ -58,6 +58,7 @@ function go(path: string) {
         <el-menu-item index="/admin/settlement">结算报表</el-menu-item>
         <el-menu-item index="/admin/credits">元子记账</el-menu-item>
         <el-menu-item index="/admin/fan-levels">粉丝等级</el-menu-item>
+        <el-menu-item index="/admin/home-entries">首页运营位</el-menu-item>
         <el-menu-item index="/admin/feed">内容审核</el-menu-item>
         <el-menu-item index="/admin/chat">会话查询</el-menu-item>
       </el-menu>

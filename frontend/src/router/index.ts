@@ -228,6 +228,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '分成比例' },
       },
       {
+        path: 'home-entries',
+        name: 'admin-home-entries',
+        component: () => import('@/admin/views/HomeEntryView.vue'),
+        meta: { title: '首页运营位' },
+      },
+      {
         path: 'feed',
         name: 'admin-feed',
         component: () => import('@/admin/views/FeedView.vue'),
