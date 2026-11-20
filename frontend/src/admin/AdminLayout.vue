@@ -35,9 +35,15 @@ function go(path: string) {
   <el-container class="admin">
     <el-header class="admin-header">
       <span class="admin-title">运营后台</span>
+      <!--
+        :ellipsis="false" 关掉 Element Plus 的自动折叠。
+        菜单项一多，默认行为会把后面的项藏进「…」里——1440px 下「会话查询」就已经看不见了，
+        而且越往后加页面藏得越多。这里改成宽度不够时横向滚动，所有项始终在同一行里可达。
+      -->
       <el-menu
         mode="horizontal"
         :default-active="route.path"
+        :ellipsis="false"
         class="admin-menu"
         @select="go"
       >
@@ -48,6 +54,7 @@ function go(path: string) {
         <el-menu-item index="/admin/commission">分成比例</el-menu-item>
         <el-menu-item index="/admin/tips">打赏管理</el-menu-item>
         <el-menu-item index="/admin/coupons">优惠券</el-menu-item>
+        <el-menu-item index="/admin/settlement">结算报表</el-menu-item>
         <el-menu-item index="/admin/credits">元子记账</el-menu-item>
         <el-menu-item index="/admin/fan-levels">粉丝等级</el-menu-item>
         <el-menu-item index="/admin/feed">内容审核</el-menu-item>
@@ -88,7 +95,25 @@ function go(path: string) {
 
 .admin-menu {
   flex: 1;
+  min-width: 0;
   border-bottom: none;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+}
+
+.admin-menu::-webkit-scrollbar {
+  height: 4px;
+}
+
+.admin-menu::-webkit-scrollbar-thumb {
+  background: #dcdfe6;
+  border-radius: 2px;
+}
+
+.admin-menu :deep(.el-menu-item) {
+  flex: none;
+  white-space: nowrap;
 }
 
 .admin-user {

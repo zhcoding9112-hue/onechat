@@ -252,6 +252,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '优惠券' },
       },
       {
+        path: 'settlement',
+        name: 'admin-settlement',
+        component: () => import('@/admin/views/SettlementView.vue'),
+        meta: { title: '结算报表' },
+      },
+      {
         path: 'credits',
         name: 'admin-credits',
         component: () => import('@/admin/views/CreditView.vue'),
