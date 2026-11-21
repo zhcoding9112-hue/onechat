@@ -52,12 +52,17 @@
 
 ### 2. 起内网穿透
 
+本机已经装了 `cloudflared`，它的临时隧道**不需要注册账号**，一条命令就有公网 HTTPS：
+
 ```bash
-# 以 cpolar 为例，把本机 8080 暴露到公网
-cpolar http 8080
+cloudflared tunnel --url http://localhost:8080
 ```
 
-拿到形如 `https://xxxx.r6.cpolar.top` 的地址。
+输出里会有一行形如 `https://xxxx-yyyy-zzzz.trycloudflare.com` 的地址。
+cpolar、ngrok、frp 也都行，有账号的话用哪个都一样。
+
+> **这个地址每次重启都会变。** 变了就要回微信测试号把「网页授权域名」重填一次，
+> 否则授权会失败。只是想看看页面长什么样的话，见下面第 6 节的省事办法。
 
 ### 3. 填网页授权域名
 
@@ -93,6 +98,26 @@ mysql -u root private_checkout -e \
 ```
 
 库里出现一条 `open_id` 以 `o` 开头（不是 `stub_`）的新记录，就是 2.2 通过了。
+
+### 6. 只想看页面，不验证授权？省事办法
+
+上面 1、3、4 步都是为了跑通**真实微信授权**。如果现在只是想在手机微信里
+看看页面长什么样，不必申请测试号，也不用配网页授权域名：
+
+```bash
+./scripts/build.sh
+cloudflared tunnel --url http://localhost:8080        # 另开一个终端，拿到公网地址
+
+APP_BASE_URL=https://拿到的地址 \
+SPRING_PROFILES_ACTIVE=local \
+java -jar build/private-checkout.jar
+```
+
+不配 `WECHAT_APP_ID` 时系统用的是本机授权桩：在微信里打开那个地址，
+会直接以测试用户的身份进入首页，跳过真实授权。
+
+**这个办法只适合自己看页面。** 它不验证微信授权链路，而且任何人拿到链接
+都能以同一个测试身份进来——别把地址发给不相干的人，看完就把隧道关掉。
 
 ### 排查
 
