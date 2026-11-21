@@ -9,6 +9,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AudioPreview: typeof import('./components/AudioPreview.vue')['default']
+    AvatarFrame: typeof import('./components/AvatarFrame.vue')['default']
     ChatThread: typeof import('./components/ChatThread.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElBadge: typeof import('element-plus/es')['ElBadge']
@@ -49,6 +50,7 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     EmptyState: typeof import('./components/EmptyState.vue')['default']
     FanTabBar: typeof import('./components/FanTabBar.vue')['default']
+    LevelBadge: typeof import('./components/LevelBadge.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TalentCardItem: typeof import('./components/TalentCardItem.vue')['default']

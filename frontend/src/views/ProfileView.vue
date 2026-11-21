@@ -1,15 +1,33 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NavBar, Image as VanImage, Skeleton } from 'vant'
+import { NavBar, Skeleton } from 'vant'
 import { fetchCurrentUser, type CurrentUser } from '@/api/session'
 import { fanLevelApi, type FanLevel } from '@/api/fanLevel'
+import LevelBadge from '@/components/LevelBadge.vue'
+import AvatarFrame from '@/components/AvatarFrame.vue'
 import { centsToYuan } from '@/utils/money'
 import FanTabBar from '@/components/FanTabBar.vue'
 
 const router = useRouter()
 const me = ref<CurrentUser | null>(null)
 const level = ref<FanLevel | null>(null)
+
+/**
+ * 当前等级内的进度。
+ *
+ * 接口只给「已花多少」和「还差多少」，本级起点要自己倒推：
+ * 本级跨度 = 已花 + 还差 − 本级门槛，而本级门槛接口没给，
+ * 所以退一步用「已花 /（已花 + 还差）」——它表达的是「离下一级还有多远」，
+ * 对粉丝来说正是想看的那个意思，也不会出现跨级后进度倒退。
+ */
+const progress = computed(() => {
+  const l = level.value
+  if (!l || l.toNextCents === null) return 100
+  const total = l.spentCents + l.toNextCents
+  if (total <= 0) return 0
+  return Math.min(100, Math.max(2, Math.round((l.spentCents / total) * 100)))
+})
 const loading = ref(true)
 
 onMounted(async () => {
@@ -35,13 +53,11 @@ onMounted(async () => {
 
     <template v-else-if="me">
       <!-- 头部：头像、昵称、等级与累计消费合成一张卡，而不是四段分开的灰条 -->
-      <section class="hero">
-        <VanImage :src="me.avatarUrl" width="56" height="56" round fit="cover" />
+      <section class="hero" :class="level ? `tier${level.level}` : ''">
+        <AvatarFrame :src="me.avatarUrl" :level="level?.level ?? 1" :size="56" />
         <div class="who">
-          <p class="name">
-            {{ me.nickname }}
-            <span v-if="level" class="level">{{ level.name }}</span>
-          </p>
+          <p class="name">{{ me.nickname }}</p>
+          <LevelBadge v-if="level" :level="level.level" :name="level.name" size="lg" />
           <p v-if="me.placeholderProfile" class="hint">微信资料未获取到，不影响使用</p>
         </div>
       </section>
@@ -52,10 +68,16 @@ onMounted(async () => {
           <span>累计消费</span>
           <span class="num spent">¥{{ centsToYuan(level.spentCents) }}</span>
         </div>
-        <p v-if="level.toNextCents !== null" class="to-next">
-          还差 <b class="num">¥{{ centsToYuan(level.toNextCents) }}</b> 升到 {{ level.nextName }}
-        </p>
-        <p v-else class="to-next">已是最高等级</p>
+
+        <!-- 进度条：只有还能升级时才画，满级画一条满的会让人以为还差一点 -->
+        <template v-if="level.toNextCents !== null">
+          <div class="bar"><i :style="{ width: progress + '%' }" /></div>
+          <p class="to-next">
+            还差 <b class="num">¥{{ centsToYuan(level.toNextCents) }}</b> 升到
+            <LevelBadge :level="(level.nextLevel ?? level.level + 1)" :name="level.nextName ?? ''" />
+          </p>
+        </template>
+        <p v-else class="to-next maxed">已是最高等级</p>
       </section>
 
       <nav class="block menu">
@@ -97,6 +119,16 @@ onMounted(async () => {
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-5) var(--sp-4);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+
+/* 昵称与徽章分两行：徽章带翅膀后比文字高，挤在一行会把昵称顶歪 */
+.who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  min-width: 0;
 }
 
 .who {
@@ -109,15 +141,35 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.level {
-  margin-left: var(--sp-2);
-  padding: 1px 7px;
+/* 进度条：细一点，不要喧宾夺主盖过上面的金额 */
+.bar {
+  margin: var(--sp-3) 0 var(--sp-2);
+  height: 6px;
   border-radius: var(--r-pill);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--c-brand-deep);
-  background: var(--c-brand-soft);
-  vertical-align: middle;
+  background: var(--c-border);
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--c-brand), #7fe3dc);
+  transition: width 0.6s ease;
+}
+
+/*
+ * 头部按等级给一层很淡的氛围底。
+ * 刻意只到「淡」为止：这是个人页，不是领奖台，底色压过头像就本末倒置了。
+ */
+.hero.tier3 {
+  background: linear-gradient(135deg, #f7f9fc, var(--c-surface) 70%);
+}
+.hero.tier4 {
+  background: linear-gradient(135deg, #fff8e8, var(--c-surface) 70%);
+}
+.hero.tier5 {
+  background: linear-gradient(135deg, #f6efe2, var(--c-surface) 70%);
 }
 
 .hint {
@@ -163,6 +215,13 @@ onMounted(async () => {
 
 .to-next b {
   color: var(--c-text-2);
+}
+
+/* 写成 .to-next.maxed 而不是 .maxed：.to-next 在它后面定义，
+   同特异性下后者赢，单写 .maxed 会被灰色盖掉 */
+.to-next.maxed {
+  color: var(--c-brand-deep);
+  font-weight: 600;
 }
 
 .menu button {
