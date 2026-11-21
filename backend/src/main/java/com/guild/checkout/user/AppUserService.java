@@ -3,6 +3,8 @@ package com.guild.checkout.user;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.guild.checkout.user.event.UserRegistered;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,9 +18,11 @@ public class AppUserService {
     private static final Logger log = LoggerFactory.getLogger(AppUserService.class);
 
     private final AppUserMapper userMapper;
+    private final ApplicationEventPublisher events;
 
-    public AppUserService(AppUserMapper userMapper) {
+    public AppUserService(AppUserMapper userMapper, ApplicationEventPublisher events) {
         this.userMapper = userMapper;
+        this.events = events;
     }
 
     public AppUser findByOpenId(String openId) {
@@ -65,6 +69,8 @@ public class AppUserService {
         try {
             userMapper.insert(user);
             log.info("新建用户 id={} openId={}", user.getId(), mask(openId));
+            // 只有真的插进去了才发事件；下面并发撞车的那一侧不发
+            events.publishEvent(new UserRegistered(user.getId(), openId));
             return user;
         } catch (DuplicateKeyException ex) {
             // 同一用户并发首次授权：唯一索引挡住第二条，回读即可。

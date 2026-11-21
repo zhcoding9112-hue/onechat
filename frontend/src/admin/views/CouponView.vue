@@ -14,6 +14,8 @@ const form = reactive({
   amount: '',
   threshold: '',
   range: [] as string[],
+  /** 注册即发。默认关：开它等于决定每个新注册的人都送一张。 */
+  autoGrant: false,
 })
 
 onMounted(reload)
@@ -32,6 +34,7 @@ function open() {
   form.amount = ''
   form.threshold = ''
   form.range = []
+  form.autoGrant = false
   dialog.value = true
 }
 
@@ -54,6 +57,7 @@ async function save() {
       thresholdCents,
       validFrom: form.range[0].replace(' ', 'T'),
       validTo: form.range[1].replace(' ', 'T'),
+      autoGrantOnRegister: form.autoGrant,
     })
     dialog.value = false
     ElMessage.success('已创建')
@@ -71,6 +75,25 @@ async function grantAll(row: AdminCoupon) {
   )
   const res = await couponAdminApi.grant(row.id)
   ElMessage.success(`新发出 ${res.granted} 张`)
+}
+
+async function toggleAutoGrant(row: AdminCoupon) {
+  const next = !row.autoGrantOnRegister
+  if (next) {
+    await ElMessageBox.confirm(
+      `打开后，此后**每一个**新注册的用户都会自动拿到「${row.name}」。` +
+        '这是一笔持续支出，不是一次性发放。已经注册过的人不会被补发——那还得用「发放」。',
+      '开启注册即发',
+      { type: 'warning', confirmButtonText: '打开', cancelButtonText: '算了' },
+    )
+  }
+  try {
+    await couponAdminApi.setAutoGrant(row.id, next)
+    ElMessage.success(next ? '已开启：此后注册的人自动拿到' : '已关闭')
+    await reload()
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e
+  }
 }
 
 /** el-table 的插槽 row 是 DefaultRow，与 CommissionView 同样的转换。 */
@@ -108,6 +131,15 @@ function money(cents: number) {
         <el-table-column label="门槛" width="130">
           <template #default="{ row }">满 {{ money(asCoupon(row).thresholdCents) }}</template>
         </el-table-column>
+        <el-table-column label="注册即发" width="160">
+          <template #default="{ row }">
+            <el-switch
+              :model-value="asCoupon(row).autoGrantOnRegister"
+              @update:model-value="() => toggleAutoGrant(asCoupon(row))"
+            />
+            <div v-if="asCoupon(row).autoGrantOnRegister" class="hint-inline">新用户自动拿到</div>
+          </template>
+        </el-table-column>
         <el-table-column prop="validFrom" label="生效" width="190" />
         <el-table-column prop="validTo" label="失效" width="190" />
         <el-table-column label="操作" width="140">
@@ -129,6 +161,12 @@ function money(cents: number) {
         <el-form-item label="使用门槛" required>
           <el-input v-model="form.threshold" placeholder="元，如 100。面额不得超过门槛" />
         </el-form-item>
+        <el-form-item label="注册即发">
+          <el-switch v-model="form.autoGrant" />
+          <span class="hint-inline" style="margin-left: 8px">
+            打开后，此后每个新注册的用户都自动拿到这张券
+          </span>
+        </el-form-item>
         <el-form-item label="有效期" required>
           <el-date-picker
             v-model="form.range"
@@ -148,6 +186,11 @@ function money(cents: number) {
 </template>
 
 <style scoped>
+.hint-inline {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+}
 .head {
   display: flex;
   align-items: center;

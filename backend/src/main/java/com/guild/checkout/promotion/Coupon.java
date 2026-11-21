@@ -22,6 +22,8 @@ public class Coupon {
     private LocalDateTime validFrom;
     private LocalDateTime validTo;
     private Boolean enabled;
+    /** 注册时自动发放给新用户。见 V22 迁移的说明。 */
+    private Boolean autoGrantOnRegister;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
     @TableField(fill = FieldFill.INSERT_UPDATE)
@@ -43,6 +45,8 @@ public class Coupon {
     public void setValidTo(LocalDateTime validTo) { this.validTo = validTo; }
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+    public Boolean getAutoGrantOnRegister() { return autoGrantOnRegister; }
+    public void setAutoGrantOnRegister(Boolean v) { this.autoGrantOnRegister = v; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

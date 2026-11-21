@@ -50,7 +50,15 @@ public class CouponService {
 
     /** 券模板的创建入参。 */
     public record CouponForm(String name, long amountCents, long thresholdCents,
-                             Long serviceItemId, LocalDateTime validFrom, LocalDateTime validTo) {
+                             Long serviceItemId, LocalDateTime validFrom, LocalDateTime validTo,
+                             /** 注册即发。null 当作 false。 */
+                             Boolean autoGrantOnRegister) {
+
+        /** 不关心「注册即发」时的简写，等同于 false。绝大多数券都是这种。 */
+        public CouponForm(String name, long amountCents, long thresholdCents,
+                          Long serviceItemId, LocalDateTime validFrom, LocalDateTime validTo) {
+            this(name, amountCents, thresholdCents, serviceItemId, validFrom, validTo, false);
+        }
     }
 
     @Transactional
@@ -82,9 +90,24 @@ public class CouponService {
         coupon.setValidFrom(form.validFrom());
         coupon.setValidTo(form.validTo());
         coupon.setEnabled(true);
+        coupon.setAutoGrantOnRegister(Boolean.TRUE.equals(form.autoGrantOnRegister()));
         couponMapper.insert(coupon);
         log.info("已创建优惠券 {}：满 {} 减 {} 分", coupon.getId(),
                 coupon.getThresholdCents(), coupon.getAmountCents());
+        return coupon;
+    }
+
+    /**
+     * 切换「注册即发」。
+     *
+     * 只影响此后注册的人：已经注册过的不会被补发，要补得用「发放」。
+     */
+    @Transactional
+    public Coupon setAutoGrantOnRegister(long couponId, boolean autoGrant) {
+        Coupon coupon = require(couponId);
+        coupon.setAutoGrantOnRegister(autoGrant);
+        couponMapper.updateById(coupon);
+        log.info("优惠券 {} 的注册即发改为 {}", couponId, autoGrant);
         return coupon;
     }
 

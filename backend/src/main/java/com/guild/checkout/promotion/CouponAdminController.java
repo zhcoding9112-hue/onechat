@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,7 +38,9 @@ public class CouponAdminController {
             @NotNull(message = "门槛为必填") Long thresholdCents,
             Long serviceItemId,
             @NotNull(message = "生效时间为必填") LocalDateTime validFrom,
-            @NotNull(message = "失效时间为必填") LocalDateTime validTo) {
+            @NotNull(message = "失效时间为必填") LocalDateTime validTo,
+            /** 注册即发给新用户。不传当作 false。 */
+            Boolean autoGrantOnRegister) {
     }
 
     /** 发放对象：userIds 为空表示全体粉丝。 */
@@ -53,7 +56,19 @@ public class CouponAdminController {
     public ApiResponse<Coupon> create(@Valid @RequestBody CreateRequest req) {
         return ApiResponse.ok(couponService.create(new CouponService.CouponForm(
                 req.name(), req.amountCents(), req.thresholdCents(),
-                req.serviceItemId(), req.validFrom(), req.validTo())));
+                req.serviceItemId(), req.validFrom(), req.validTo(),
+                req.autoGrantOnRegister())));
+    }
+
+    /**
+     * 开关「注册即发」。
+     *
+     * 只对此后注册的人生效；已经注册过的要补，还是用下面的发放接口。
+     */
+    @PutMapping("/{couponId}/auto-grant/{enabled}")
+    public ApiResponse<Coupon> setAutoGrant(@PathVariable long couponId,
+                                            @PathVariable boolean enabled) {
+        return ApiResponse.ok(couponService.setAutoGrantOnRegister(couponId, enabled));
     }
 
     @PostMapping("/{couponId}/grant")

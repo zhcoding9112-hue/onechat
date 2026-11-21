@@ -95,6 +95,9 @@ DELETE FROM service_order      WHERE @go = 1;
 DELETE FROM tip_record         WHERE @go = 1;
 DELETE FROM credit_transaction WHERE @go = 1;
 DELETE FROM credit_account     WHERE @go = 1;
+-- 注意：这一行会把**所有**已发出的券连根拔掉，包括注册时自动发的新人券。
+-- 开发期这是对的（券都是测试发的），但上线之后再跑这个脚本就等于收回全体用户的券。
+-- 上线后若还要用本脚本，先把这一行注释掉，或者改成只删测试账号名下的。
 DELETE FROM user_coupon        WHERE @go = 1;
 
 -- 榜单与埋点：口径在开发期变过多次，留着只会误导
