@@ -63,6 +63,48 @@ class AssetProvenanceTest {
     }
 
     /**
+     * SVG 必须是合法的 XML。
+     *
+     * 这条是补上一个真出过的事故：默认头像的说明注释里写了 CSS 变量名
+     * （--g-avatar），而 XML 注释里不允许出现连续两个减号，整个文件解析失败。
+     * 后果是全站的默认头像一直是一个裂图标——文件在、路径对、Content-Type 对、
+     * HTTP 200，只有浏览器解析时才报错，所以谁也没发现。
+     *
+     * 让构建去解析一遍，比指望有人盯着每个头像看可靠。
+     */
+    @Test
+    @DisplayName("12.2 每个 SVG 都能被解析 — 裂图不该靠肉眼发现")
+    void SVG必须是合法XML() throws Exception {
+        List<Path> svgs = new java.util.ArrayList<>();
+        for (Path root : List.of(FRONTEND.resolve("public"), FRONTEND.resolve("src"))) {
+            if (!Files.isDirectory(root)) {
+                continue;
+            }
+            try (Stream<Path> walk = Files.walk(root)) {
+                walk.filter(Files::isRegularFile)
+                        .filter(f -> f.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".svg"))
+                        .forEach(svgs::add);
+            }
+        }
+
+        javax.xml.parsers.DocumentBuilderFactory factory =
+                javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        // 不去网上取 DTD，离线构建也要能跑
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+
+        for (Path svg : svgs) {
+            try {
+                javax.xml.parsers.DocumentBuilder builder = factory.newDocumentBuilder();
+                builder.setErrorHandler(null);
+                builder.parse(svg.toFile());
+            } catch (Exception ex) {
+                throw new AssertionError(
+                        "SVG 解析失败，浏览器会把它显示成裂图：" + svg + " —— " + ex.getMessage(), ex);
+            }
+        }
+    }
+
+    /**
      * 构建产物里也不该有计划外的图片。
      *
      * dist 要先跑过一次 npm run build 才有；没有就跳过，而不是失败——

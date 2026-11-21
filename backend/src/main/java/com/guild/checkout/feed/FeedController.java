@@ -3,7 +3,12 @@ package com.guild.checkout.feed;
 import com.guild.checkout.auth.CurrentUser;
 import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.common.api.ApiResponse;
+import com.guild.checkout.level.FanLevelService;
 import com.guild.checkout.talent.Talent;
+import com.guild.checkout.talent.TalentService;
+import com.guild.checkout.user.AppUser;
+import com.guild.checkout.user.AppUserMapper;
+import com.guild.checkout.user.UserDisplay;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +24,10 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /** 粉丝侧的动态广场、心动墙与举报。 */
 @RestController
@@ -28,13 +37,22 @@ public class FeedController {
     private final FeedService feedService;
     private final ReportService reportService;
     private final CrushWallService crushWallService;
+    private final TalentService talentService;
+    private final AppUserMapper userMapper;
+    private final FanLevelService fanLevelService;
 
     public FeedController(FeedService feedService,
                           ReportService reportService,
-                          CrushWallService crushWallService) {
+                          CrushWallService crushWallService,
+                          TalentService talentService,
+                          AppUserMapper userMapper,
+                          FanLevelService fanLevelService) {
         this.feedService = feedService;
         this.reportService = reportService;
         this.crushWallService = crushWallService;
+        this.talentService = talentService;
+        this.userMapper = userMapper;
+        this.fanLevelService = fanLevelService;
     }
 
     public record PostView(Long id, Long talentId, String nickname, String coverUrl,
@@ -46,7 +64,19 @@ public class FeedController {
     public record PostPage(List<PostView> items, long total, boolean hasMore) {
     }
 
-    public record CommentView(Long id, Long userId, String content, LocalDateTime createdAt) {
+    /**
+     * 一条评论。
+     *
+     * 原本只有 (id, userId, content, createdAt)——前端连"这句话是谁说的"都显示不了，
+     * 评论区实际是匿名的。补上昵称与头像之后才算个评论区。
+     *
+     * @param author    是不是这条动态的主播本人
+     * @param level     粉丝等级。作者本人为 null：主播没有"粉丝等级"这回事，
+     *                  给他挂一个"新客"反而荒唐
+     */
+    public record CommentView(Long id, Long userId, String nickname, String avatarUrl,
+                              boolean author, Integer level, String levelName,
+                              String content, LocalDateTime createdAt) {
     }
 
     public record CommentRequest(
@@ -106,18 +136,60 @@ public class FeedController {
 
     @GetMapping("/posts/{postId}/comments")
     public ApiResponse<List<CommentView>> comments(@PathVariable long postId) {
-        feedService.requireVisible(postId);
-        return ApiResponse.ok(feedService.comments(postId).stream()
-                .map(c -> new CommentView(c.getId(), c.getUserId(), c.getContent(), c.getCreatedAt()))
-                .toList());
+        FeedPost post = feedService.requireVisible(postId);
+        return ApiResponse.ok(toCommentViews(feedService.comments(postId), post));
     }
 
     @PostMapping("/posts/{postId}/comments")
     public ApiResponse<CommentView> comment(@PathVariable long postId,
                                             @Valid @RequestBody CommentRequest req) {
+        FeedPost post = feedService.requireVisible(postId);
         FeedComment c = feedService.comment(
                 CurrentUserHolder.requireUserId(), postId, req.content());
-        return ApiResponse.ok(new CommentView(c.getId(), c.getUserId(), c.getContent(), c.getCreatedAt()));
+        return ApiResponse.ok(toCommentViews(List.of(c), post).get(0));
+    }
+
+    /**
+     * 把评论装配成带身份的视图。
+     *
+     * 昵称与等级都批量查：一篇动态下几十条评论，逐条查用户再逐条算等级，
+     * 就是几十次往返加上百条聚合查询。
+     */
+    private List<CommentView> toCommentViews(List<FeedComment> comments, FeedPost post) {
+        if (comments.isEmpty()) {
+            return List.of();
+        }
+
+        // 作者本人的 userId：动态属于主播，主播可能还没绑用户
+        Talent talent = post.getTalentId() == null ? null : talentService.find(post.getTalentId());
+        Long authorUserId = talent == null ? null : talent.getUserId();
+
+        List<Long> userIds = comments.stream().map(FeedComment::getUserId)
+                .filter(Objects::nonNull).distinct().toList();
+        Map<Long, AppUser> users = userIds.isEmpty() ? Map.of()
+                : userMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(AppUser::getId, Function.identity()));
+
+        // 作者不参与等级计算：主播没有「粉丝等级」这回事。
+        // 这里是唯一一处决定「谁有等级」——下面直接按 id 取，不再重复判一次作者，
+        // 两道一模一样的闸门里坏掉任何一道都测不出来。
+        List<Long> fanIds = userIds.stream()
+                .filter(id -> !Objects.equals(id, authorUserId)).toList();
+        Map<Long, FanLevelService.FanLevel> levels = fanLevelService.levelsOf(fanIds);
+
+        return comments.stream().map(c -> {
+            AppUser u = users.get(c.getUserId());
+            boolean isAuthor = authorUserId != null && Objects.equals(c.getUserId(), authorUserId);
+            FanLevelService.FanLevel lv = levels.get(c.getUserId());
+            return new CommentView(
+                    c.getId(), c.getUserId(),
+                    UserDisplay.nickname(u == null ? null : u.getNickname(), c.getUserId()),
+                    UserDisplay.avatarUrl(u == null ? null : u.getAvatarUrl()),
+                    isAuthor,
+                    lv == null ? null : lv.level(),
+                    lv == null ? null : lv.name(),
+                    c.getContent(), c.getCreatedAt());
+        }).toList();
     }
 
     // ---------- 举报 ----------

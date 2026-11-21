@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NavBar, Skeleton, showToast, showImagePreview } from 'vant'
 import { feedApi, type FeedCommentView, type FeedPostView } from '@/api/feed'
@@ -103,8 +104,16 @@ function timeText(iso: string) {
       <EmptyState v-if="comments.length === 0" description="还没有评论" />
       <div v-else class="comments">
         <div v-for="c in comments" :key="c.id" class="comment">
-          <p class="c-text">{{ c.content }}</p>
-          <span class="c-time">{{ timeText(c.createdAt) }}</span>
+          <img class="c-avatar" :src="c.avatarUrl" alt="" />
+          <div class="c-body">
+            <div class="c-head">
+              <span class="c-name">{{ c.nickname }}</span>
+              <span v-if="c.author" class="c-author">作者</span>
+              <LevelBadge v-else-if="c.level" :level="c.level" :name="c.levelName ?? ''" />
+              <span class="c-time">{{ timeText(c.createdAt) }}</span>
+            </div>
+            <p class="c-text">{{ c.content }}</p>
+          </div>
         </div>
       </div>
 
@@ -216,8 +225,52 @@ function timeText(iso: string) {
 }
 
 .comment {
+  display: flex;
+  gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--c-border);
+}
+
+.c-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--c-border);
+  flex: none;
+}
+
+.c-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 昵称、身份、时间一行。时间靠右，中间的徽章不被挤掉 */
+.c-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: 2px;
+}
+
+.c-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 作者标记用主色，和粉丝等级那套金银区分开——它不是等级 */
+.c-author {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--c-brand-deep);
+  background: var(--c-brand-soft);
 }
 
 .comment:last-child {
@@ -232,6 +285,8 @@ function timeText(iso: string) {
 }
 
 .c-time {
+  margin-left: auto;
+  flex: none;
   font-size: var(--fs-sm);
   color: var(--c-text-3);
 }

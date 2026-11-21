@@ -23,6 +23,13 @@ export interface FeedPostPage {
 export interface FeedCommentView {
   id: number
   userId: number
+  nickname: string
+  avatarUrl: string
+  /** 是这条动态的主播本人。 */
+  author: boolean
+  /** 粉丝等级。作者本人为 null——主播没有粉丝等级。 */
+  level: number | null
+  levelName: string | null
   content: string
   createdAt: string
 }

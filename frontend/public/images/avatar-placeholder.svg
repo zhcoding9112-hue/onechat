@@ -1,9 +1,11 @@
-<!--
-  默认头像。自制，不来自任何第三方素材库。
-  配色取自 styles.css 里的 --g-avatar 与 --c-offline：写成字面量是因为
-  这个文件会被 <img src> 直接引用，拿不到页面上的 CSS 变量。
--->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="默认头像">
+  <title>默认头像</title>
+  <desc>
+    自制，不来自任何第三方素材库。配色对应 styles.css 里的头像渐变与离线灰，
+    写成字面量是因为这个文件被 img src 直接引用，拿不到页面上的 CSS 变量。
+    注意：XML 注释里不能出现连续两个减号，所以这里用 desc 而不是注释
+    （上一版就是因为注释里写了 CSS 变量名而整个文件解析失败，头像一直是裂的）。
+  </desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">
       <stop offset="0" stop-color="#e7eef0"/>
