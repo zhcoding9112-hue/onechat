@@ -6,6 +6,7 @@ import com.guild.checkout.common.exception.ForbiddenException;
 import com.guild.checkout.common.exception.NotFoundException;
 import com.guild.checkout.talent.Talent;
 import com.guild.checkout.talent.TalentService;
+import com.guild.checkout.level.FanLevelService;
 import com.guild.checkout.user.AppUser;
 import com.guild.checkout.user.AppUserService;
 import com.guild.checkout.user.UserDisplay;
@@ -46,17 +47,20 @@ public class ChatService {
     private final ChatUnreadMapper unreadMapper;
     private final TalentService talentService;
     private final AppUserService userService;
+    private final FanLevelService fanLevelService;
 
     public ChatService(ChatConversationMapper conversationMapper,
                        ChatMessageMapper messageMapper,
                        ChatUnreadMapper unreadMapper,
                        TalentService talentService,
-                       AppUserService userService) {
+                       AppUserService userService,
+                       FanLevelService fanLevelService) {
         this.conversationMapper = conversationMapper;
         this.messageMapper = messageMapper;
         this.unreadMapper = unreadMapper;
         this.talentService = talentService;
         this.userService = userService;
+        this.fanLevelService = fanLevelService;
     }
 
     /**
@@ -68,6 +72,8 @@ public class ChatService {
      */
     public record ConversationView(ChatConversation conversation, Talent talent,
                                    String fanNickname, String fanAvatarUrl,
+                                   /** 粉丝等级，只给主播侧用。粉丝看主播时没有这个概念。 */
+                                   Integer fanLevel, String fanLevelName,
                                    ChatMessage lastMessage, long unread,
                                    boolean canSend, String disabledReason) {
     }
@@ -324,13 +330,20 @@ public class ChatService {
             }
         }
 
+        // 等级一次批量算完。逐条查的话一屏 50 个会话就是 100 条聚合查询
+        Map<Long, FanLevelService.FanLevel> levels = fanLevelService.levelsOf(
+                list.stream().map(ChatConversation::getFanUserId).toList());
+
         return list.stream().map(c -> {
             Talent t = talents.get(c.getTalentId());
             boolean listed = t != null && Boolean.TRUE.equals(t.getListed());
             AppUser fan = userService.requireById(c.getFanUserId());
+            FanLevelService.FanLevel lv = levels.get(c.getFanUserId());
             return new ConversationView(c, t,
                     UserDisplay.nickname(fan.getNickname(), fan.getId()),
                     UserDisplay.avatarUrl(fan.getAvatarUrl()),
+                    lv == null ? null : lv.level(),
+                    lv == null ? null : lv.name(),
                     lastMessages.get(c.getId()),
                     unread.getOrDefault(c.getId(), 0L),
                     listed, listed ? null : UNAVAILABLE_HINT);

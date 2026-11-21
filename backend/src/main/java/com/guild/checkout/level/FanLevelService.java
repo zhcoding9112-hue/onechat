@@ -5,7 +5,11 @@ import com.guild.checkout.common.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 粉丝等级。
@@ -47,9 +51,44 @@ public class FanLevelService {
     }
 
     public FanLevel levelOf(long userId) {
-        long spent = spendingOf(userId);
-        List<FanLevelSetting> tiers = thresholds();
+        return resolve(spendingOf(userId), thresholds());
+    }
 
+    /**
+     * 批量算等级。给聊天列表这种「一屏多个粉丝」的场景用。
+     *
+     * 与 levelOf 共用同一套档位判定，避免两处规则漂移；
+     * 差别只在消费额是批量查出来的。
+     */
+    public Map<Long, FanLevel> levelsOf(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> ids = userIds.stream().filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Long> spent = new HashMap<>();
+        for (var row : spendingMapper.orderSpendingOf(ids)) {
+            spent.merge(row.userId(), row.cents(), Long::sum);
+        }
+        for (var row : spendingMapper.tipSpendingOf(ids)) {
+            spent.merge(row.userId(), row.cents(), Long::sum);
+        }
+
+        List<FanLevelSetting> tiers = thresholds();
+        Map<Long, FanLevel> result = new HashMap<>();
+        for (Long id : ids) {
+            // 没有任何流水的人查不出行，按 0 算——他就是最低档
+            result.put(id, resolve(spent.getOrDefault(id, 0L), tiers));
+        }
+        return result;
+    }
+
+    /** 由消费额与档位算出等级。levelOf 与 levelsOf 都走这里。 */
+    private static FanLevel resolve(long spent, List<FanLevelSetting> tiers) {
         FanLevelSetting current = tiers.get(0);
         FanLevelSetting next = null;
         for (FanLevelSetting tier : tiers) {

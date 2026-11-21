@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import { useRouter } from 'vue-router'
 import { NavBar, Skeleton } from 'vant'
 import { talentChatApi, type ChatConversationView } from '@/api/chat'
@@ -61,6 +62,11 @@ function timeText(iso: string) {
         <div class="main">
           <div class="top">
             <span class="name">{{ c.nickname ?? '粉丝' }}</span>
+            <LevelBadge
+              v-if="c.peerLevel"
+              :level="c.peerLevel"
+              :name="c.peerLevelName ?? ''"
+            />
             <span class="time">{{ timeText(c.lastMessageAt) }}</span>
           </div>
           <p class="preview">{{ c.lastMessage ?? '还没有消息' }}</p>
@@ -71,6 +77,11 @@ function timeText(iso: string) {
 </template>
 
 <style scoped>
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .page {
   min-height: 100vh;
   background: var(--g-page);

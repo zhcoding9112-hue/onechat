@@ -43,7 +43,14 @@ public class ChatController {
         this.storage = storage;
     }
 
+    /**
+     * 列表项。「对方」是谁由查看者身份决定。
+     *
+     * peerLevel / peerLevelName 只在主播看粉丝时有值：粉丝等级是粉丝才有的东西，
+     * 粉丝看主播时这两个字段为 null，前端据此决定画不画徽章。
+     */
     public record ConversationView(Long id, Long talentId, String nickname, String coverUrl,
+                                   Integer peerLevel, String peerLevelName,
                                    String lastMessage, String lastMessageType,
                                    LocalDateTime lastMessageAt,
                                    long unread, boolean canSend, String disabledReason) {
@@ -171,6 +178,9 @@ public class ChatController {
                 v.conversation().getId(), v.conversation().getTalentId(),
                 asFan ? (t == null ? null : t.getNickname()) : v.fanNickname(),
                 asFan ? (t == null ? null : t.getCoverUrl()) : v.fanAvatarUrl(),
+                // 粉丝侧不带等级：主播没有「粉丝等级」，塞个值进去只会让前端误画
+                asFan ? null : v.fanLevel(),
+                asFan ? null : v.fanLevelName(),
                 last == null ? null : summary(last),
                 last == null ? null : last.getContentType(),
                 v.conversation().getLastMessageAt(),

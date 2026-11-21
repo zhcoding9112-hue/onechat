@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
+import LevelBadge from '@/components/LevelBadge.vue'
 import { useRouter } from 'vue-router'
 import { NavBar, Skeleton, showToast, showImagePreview } from 'vant'
 import type { ChatConversationView, ChatMessageView, ChatView } from '@/api/chat'
@@ -112,11 +113,18 @@ function timeText(iso: string) {
 
 <template>
   <div class="page">
-    <NavBar
-      :title="conversation?.nickname ?? '聊天'"
-      left-arrow
-      @click-left="router.back()"
-    >
+    <NavBar left-arrow @click-left="router.back()">
+      <!-- 用 title 插槽而不是 title 属性：要在昵称旁边放徽章，字符串塞不下组件 -->
+      <template #title>
+        <span class="peer">
+          <span class="peer-name">{{ conversation?.nickname ?? '聊天' }}</span>
+          <LevelBadge
+            v-if="conversation?.peerLevel"
+            :level="conversation.peerLevel"
+            :name="conversation.peerLevelName ?? ''"
+          />
+        </span>
+      </template>
       <template #right>
         <span v-if="peerUrl()" class="nav-link" @click="router.push(peerUrl()!)">主页</span>
       </template>
@@ -181,6 +189,20 @@ function timeText(iso: string) {
 </template>
 
 <style scoped>
+/* 标题栏里昵称与徽章同排。昵称可能很长，徽章不能被挤掉 */
+.peer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  max-width: 62vw;
+}
+
+.peer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
 .page {
   display: flex;
   flex-direction: column;

@@ -5,6 +5,12 @@ export interface ChatConversationView {
   talentId: number
   nickname: string | null
   coverUrl: string | null
+  /**
+   * 对方的粉丝等级。只有主播看粉丝时才有值——
+   * 粉丝看主播时为 null，因为主播没有「粉丝等级」这个东西。
+   */
+  peerLevel: number | null
+  peerLevelName: string | null
   /** 列表摘要。图片消息显示为「[图片]」；最后一条被下架时为 null。 */
   lastMessage: string | null
   lastMessageType: string | null

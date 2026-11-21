@@ -34,6 +34,8 @@ class ChatTest {
     @Autowired private ChatMessageMapper messageMapper;
     @Autowired private TalentAdminService talentAdminService;
     @Autowired private AppUserService userService;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired private com.guild.checkout.level.FanLevelService fanLevelService;
 
     private long fanId;
     private long otherFanId;
@@ -52,6 +54,93 @@ class ChatTest {
         userService.grantRole(talentUserId, UserRole.TALENT);
         talentId = newTalent("聊天主播");
         talentAdminService.linkUser(talentId, talentUserId);
+    }
+
+    // ===== 主播在会话里看得见粉丝等级 =====
+
+    @Test
+    @DisplayName("主播侧的会话带着粉丝等级，粉丝侧不带")
+    void 会话带粉丝等级() {
+        spend(fanId, 80000);  // 银卡门槛是 600 元
+        long id = openConversation();
+        ChatConversation c = conversationMapper.selectById(id);
+
+        ChatService.ConversationView view = chatService.view(c, 0L);
+
+        assertThat(view.fanLevel()).isNotNull();
+        assertThat(view.fanLevelName()).isNotBlank();
+        // 服务层两边的资料都带，由控制器按身份挑；这里验的是「算出来了」
+        assertThat(view.fanNickname()).isNotBlank();
+    }
+
+    /**
+     * 等级是按当下的消费额算的，不是建会话时定死的。
+     *
+     * 刻意不写成「读一次 → 花钱 → 再读一次」：那样会撞上 MyBatis 的一级缓存——
+     * 同一个事务里相同参数的查询直接返回上次结果，而本用例的消费是用
+     * JdbcTemplate 插的，MyBatis 不知道有人写过，缓存不会失效。
+     * 生产里两次读分属两个请求、两个会话，不存在这个问题，
+     * 所以那样写只会测出一个测试环境特有的假象。
+     */
+    @Test
+    @DisplayName("会话里的等级与粉丝自己看到的是同一个")
+    void 等级与粉丝自己看到的一致() {
+        spend(fanId, 80000);
+        long id = openConversation();
+        ChatConversation c = conversationMapper.selectById(id);
+
+        ChatService.ConversationView view = chatService.view(c, 0L);
+        var authoritative = fanLevelService.levelOf(fanId);
+
+        // 不写死「¥800 是银卡」：门槛是运营可改的配置，写死等于把配置钉进测试。
+        // 真正要守的是「两处显示的是同一个等级」。
+        assertThat(view.fanLevel()).isEqualTo(authoritative.level());
+        assertThat(view.fanLevelName()).isEqualTo(authoritative.name());
+        assertThat(view.fanLevel()).as("花了钱就不该还停在最低档").isGreaterThan(1);
+    }
+
+    @Test
+    @DisplayName("没花过钱的粉丝是最低级，不是 null")
+    void 零消费也有等级() {
+        long id = openConversation();
+        ChatConversation c = conversationMapper.selectById(id);
+
+        ChatService.ConversationView view = chatService.view(c, 0L);
+
+        assertThat(view.fanLevel()).as("0 消费也该有等级，不能让前端拿到 null").isEqualTo(1);
+    }
+
+    /**
+     * 列表里每条会话的等级要对上各自的粉丝，不能整列都用同一个人的。
+     * 批量查询最容易犯的就是这个错。
+     */
+    @Test
+    @DisplayName("列表里每个粉丝对应自己的等级")
+    void 列表等级不串行() {
+        spend(fanId, 80000);
+        chatService.open(fanId, talentId);
+        chatService.open(otherFanId, talentId);
+
+        var views = chatService.talentConversations(talentId, 50);
+
+        var rich = views.stream()
+                .filter(v -> v.conversation().getFanUserId().equals(fanId)).findFirst().orElseThrow();
+        var poor = views.stream()
+                .filter(v -> v.conversation().getFanUserId().equals(otherFanId)).findFirst().orElseThrow();
+        assertThat(rich.fanLevel()).isEqualTo(fanLevelService.levelOf(fanId).level());
+        assertThat(poor.fanLevel()).as("没花过钱的是最低档").isEqualTo(1);
+        assertThat(rich.fanLevel()).isGreaterThan(poor.fanLevel());
+    }
+
+    /** 造一笔已完成的打赏当作消费。走服务层太绕，这里只需要一条流水。 */
+    private void spend(long userId, long cents) {
+        jdbc.update("""
+                INSERT INTO tip_record (tip_ref, fan_user_id, talent_id, amount_cents, paid_cents,
+                  commission_rate_bp, guild_cents, talent_cents, status, version, created_at)
+                VALUES (?, ?, ?, ?, ?, 3000, ?, ?, 'COMPLETED', 0, NOW())
+                """,
+                "T" + System.nanoTime(), userId, talentId, cents, cents,
+                cents * 30 / 100, cents - cents * 30 / 100);
     }
 
     private AppUser newUser(String prefix) {
