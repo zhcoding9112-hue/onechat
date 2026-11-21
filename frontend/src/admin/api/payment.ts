@@ -1,5 +1,6 @@
 import { http } from '@/api/http'
 import type { AdminOrder } from '@/admin/api/order'
+import type { PageResponse } from '@/api/types'
 
 /** 待对账的一行：粉丝已上传凭证、等运营核对的订单。 */
 export interface ReconcileItem {
@@ -57,8 +58,12 @@ export const paymentAdminApi = {
    * 待支付订单：粉丝没传凭证，但钱可能已经到账。
    * 这一类不在待对账队列里，只能从订单列表捞。
    */
-  pendingPayment: () =>
-    http.get<AdminOrder[]>('/api/admin/orders?status=PENDING_PAYMENT'),
+  pendingPayment: async () =>
+    // 订单列表已经改成分页响应，这里只要待支付那一页；
+    // 人工收款模式下这个队列不会很长，取一页足够。
+    (await http.get<PageResponse<AdminOrder>>(
+      '/api/admin/orders?status=PENDING_PAYMENT&page=0&size=100',
+    )).items,
 
   /**
    * 确认收款。实收与应付不一致时后端要求必须填差异说明。

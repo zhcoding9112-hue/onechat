@@ -31,8 +31,13 @@ const orders = ref<AdminOrder[]>([])
 const deadlines = ref<OrderDeadlineSetting | null>(null)
 
 const filterStatus = ref('')
-/** 订单号 / 主播 / 粉丝微信号的本地过滤。接口没有搜索参数。 */
+/** 订单号 / 主播 / 粉丝微信号。由服务端过滤，不是在已加载的列表里找。 */
 const keyword = ref('')
+const page = ref(0)
+const pageSize = ref(20)
+const total = ref(0)
+/** 输入时防抖，别每敲一个字就打一次接口。 */
+let searchTimer: number | undefined
 
 const deadlineForm = reactive({ editing: false, pay: 30, accept: 15 })
 
@@ -43,15 +48,7 @@ const history = reactive({
   entries: [] as OrderHistoryEntry[],
 })
 
-const shown = computed(() => {
-  const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return orders.value
-  return orders.value.filter((o) =>
-    [o.orderRef, o.talentNickname, o.contact, o.serviceItemName]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(kw)),
-  )
-})
+
 
 /** 待退款队列里压着的钱。超时订单的钱已经收了，还没退回去。 */
 const owedCents = computed(() =>
@@ -63,11 +60,17 @@ async function load() {
   try {
     const [queue, list, dl] = await Promise.all([
       orderAdminApi.refundQueue(),
-      orderAdminApi.list(filterStatus.value || undefined),
+      orderAdminApi.list({
+        status: filterStatus.value || undefined,
+        keyword: keyword.value,
+        page: page.value,
+        size: pageSize.value,
+      }),
       orderAdminApi.deadlines(),
     ])
     refundQueue.value = queue
-    orders.value = list
+    orders.value = list.items
+    total.value = list.total
     deadlines.value = dl
   } catch (e) {
     if (!(e instanceof ApiError)) throw e
@@ -80,10 +83,39 @@ onMounted(load)
 
 async function loadOrders() {
   try {
-    orders.value = await orderAdminApi.list(filterStatus.value || undefined)
+    const list = await orderAdminApi.list({
+      status: filterStatus.value || undefined,
+      keyword: keyword.value,
+      page: page.value,
+      size: pageSize.value,
+    })
+    orders.value = list.items
+    total.value = list.total
   } catch (e) {
     if (!(e instanceof ApiError)) throw e
   }
+}
+
+/** 换筛选条件或关键字都要回到第一页，否则会停在一个空页上。 */
+function resetAndLoad() {
+  page.value = 0
+  void loadOrders()
+}
+
+function onKeywordInput() {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(resetAndLoad, 300)
+}
+
+function changePage(next: number) {
+  page.value = next - 1
+  void loadOrders()
+}
+
+function changeSize(next: number) {
+  pageSize.value = next
+  page.value = 0
+  void loadOrders()
 }
 
 // ---------- 处置 ----------
@@ -300,7 +332,7 @@ function operatorLabel(type: OrderHistoryEntry['operatorType']) {
       <el-tab-pane label="全部订单" name="all">
         <el-card shadow="never" style="margin-bottom: 12px">
           <div class="filters">
-            <el-select v-model="filterStatus" style="width: 150px" @change="loadOrders">
+            <el-select v-model="filterStatus" style="width: 150px" @change="resetAndLoad">
               <el-option
                 v-for="s in STATUSES"
                 :key="s.value"
@@ -313,16 +345,16 @@ function operatorLabel(type: OrderHistoryEntry['operatorType']) {
               placeholder="订单号 / 主播 / 粉丝微信号"
               clearable
               style="width: 260px"
+              @input="onKeywordInput"
+              @clear="resetAndLoad"
             />
-            <span class="sub">
-              共 {{ shown.length }} 条。接口没有分页与搜索，这里是在已加载的列表里过滤。
-            </span>
+            <span class="sub">共 {{ total }} 条</span>
           </div>
         </el-card>
 
         <el-card shadow="never">
-          <el-empty v-if="!shown.length" description="没有符合条件的订单" />
-          <el-table v-else :data="shown" row-key="id">
+          <el-empty v-if="!orders.length" description="没有符合条件的订单" />
+          <el-table v-else :data="orders" row-key="id">
             <el-table-column label="订单" min-width="190">
               <template #default="{ row }">
                 <div class="mono">{{ asOrder(row).orderRef }}</div>
@@ -392,6 +424,18 @@ function operatorLabel(type: OrderHistoryEntry['operatorType']) {
               </template>
             </el-table-column>
           </el-table>
+
+          <el-pagination
+            v-if="total > pageSize"
+            :current-page="page + 1"
+            :page-size="pageSize"
+            :total="total"
+            :page-sizes="[20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            style="margin-top: 12px; justify-content: flex-end"
+            @current-change="changePage"
+            @size-change="changeSize"
+          />
         </el-card>
       </el-tab-pane>
 

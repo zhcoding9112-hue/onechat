@@ -14,6 +14,12 @@ const records = ref<AdminTip[]>([])
 const limits = ref<TipLimits | null>(null)
 
 const recordStatus = ref<TipStatus>('COMPLETED')
+/** 打赏单号 / 主播昵称 / 粉丝昵称。由服务端过滤。 */
+const keyword = ref('')
+const page = ref(0)
+const pageSize = ref(20)
+const total = ref(0)
+let searchTimer: number | undefined
 
 const limitForm = reactive({ editing: false, min: '', max: '' })
 
@@ -44,14 +50,21 @@ async function load() {
   loading.value = true
   try {
     const [p1, p2, rec, lim] = await Promise.all([
-      tipAdminApi.list('PENDING_PAYMENT'),
-      tipAdminApi.list('PENDING_CONFIRM'),
-      tipAdminApi.list(recordStatus.value),
+      // 待处理队列不分页：它应该是短的，长了说明没人对账，那本身就是问题
+      tipAdminApi.list({ status: 'PENDING_PAYMENT', size: 100 }),
+      tipAdminApi.list({ status: 'PENDING_CONFIRM', size: 100 }),
+      tipAdminApi.list({
+        status: recordStatus.value,
+        keyword: keyword.value,
+        page: page.value,
+        size: pageSize.value,
+      }),
       tipAdminApi.limits(),
     ])
     // 两个状态合起来按 id 倒序，新的在前
-    pending.value = [...p1, ...p2].sort((a, b) => b.id - a.id)
-    records.value = rec
+    pending.value = [...p1.items, ...p2.items].sort((a, b) => b.id - a.id)
+    records.value = rec.items
+    total.value = rec.total
     limits.value = lim
   } catch (e) {
     if (!(e instanceof ApiError)) throw e
@@ -64,10 +77,39 @@ onMounted(load)
 
 async function loadRecords() {
   try {
-    records.value = await tipAdminApi.list(recordStatus.value)
+    const rec = await tipAdminApi.list({
+      status: recordStatus.value,
+      keyword: keyword.value,
+      page: page.value,
+      size: pageSize.value,
+    })
+    records.value = rec.items
+    total.value = rec.total
   } catch (e) {
     if (!(e instanceof ApiError)) throw e
   }
+}
+
+/** 换状态或关键字都回到第一页，否则会停在一个空页上。 */
+function resetAndLoad() {
+  page.value = 0
+  void loadRecords()
+}
+
+function onKeywordInput() {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(resetAndLoad, 300)
+}
+
+function changePage(next: number) {
+  page.value = next - 1
+  void loadRecords()
+}
+
+function changeSize(next: number) {
+  pageSize.value = next
+  page.value = 0
+  void loadRecords()
 }
 
 // ---------- 确认收款 ----------
@@ -288,14 +330,22 @@ function splitText(row: AdminTip) {
       <!-- ---------- 记录 ---------- -->
       <el-tab-pane label="记录" name="records">
         <el-card shadow="never" style="margin-bottom: 12px">
-          <el-radio-group v-model="recordStatus" @change="loadRecords">
-            <el-radio-button value="COMPLETED">已完成</el-radio-button>
-            <el-radio-button value="REFUNDED">已退款</el-radio-button>
-            <el-radio-button value="CANCELLED">已取消</el-radio-button>
-          </el-radio-group>
-          <span class="sub" style="margin-left: 12px">
-            接口暂未分页，记录多了之后这一页会变慢
-          </span>
+          <div class="filters">
+            <el-radio-group v-model="recordStatus" @change="resetAndLoad">
+              <el-radio-button value="COMPLETED">已完成</el-radio-button>
+              <el-radio-button value="REFUNDED">已退款</el-radio-button>
+              <el-radio-button value="CANCELLED">已取消</el-radio-button>
+            </el-radio-group>
+            <el-input
+              v-model="keyword"
+              placeholder="打赏单号 / 主播 / 粉丝昵称"
+              clearable
+              style="width: 240px"
+              @input="onKeywordInput"
+              @clear="resetAndLoad"
+            />
+            <span class="sub">共 {{ total }} 条</span>
+          </div>
         </el-card>
 
         <el-card shadow="never">
@@ -352,6 +402,18 @@ function splitText(row: AdminTip) {
               </template>
             </el-table-column>
           </el-table>
+
+          <el-pagination
+            v-if="total > pageSize"
+            :current-page="page + 1"
+            :page-size="pageSize"
+            :total="total"
+            :page-sizes="[20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            style="margin-top: 12px; justify-content: flex-end"
+            @current-change="changePage"
+            @size-change="changeSize"
+          />
         </el-card>
       </el-tab-pane>
 
@@ -465,5 +527,11 @@ function splitText(row: AdminTip) {
 .tab-badge {
   margin-left: 2px;
   vertical-align: middle;
+}
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 </style>

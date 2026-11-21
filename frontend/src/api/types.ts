@@ -23,3 +23,11 @@ export const ErrorCode = {
 } as const
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode]
+
+/** 分页响应。与后端 common.api.PageResponse 一致。 */
+export interface PageResponse<T> {
+  items: T[]
+  /** 符合条件的总条数，不受分页影响。 */
+  total: number
+  hasMore: boolean
+}

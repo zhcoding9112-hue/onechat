@@ -266,6 +266,132 @@ class OrderApiTest {
                 .andExpect(status().isForbidden());
     }
 
+    // ---------- 运营订单列表：分页与搜索 ----------
+
+    @Test
+    @DisplayName("订单列表分页 — items 按页返回，total 是全量条数")
+    void 订单列表分页() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            createOrder(1, "wxid_page" + i, null);
+        }
+
+        JsonNode first = dataOf(mockMvc.perform(
+                get("/api/admin/orders?status=PENDING_PAYMENT&page=0&size=2").session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(first.get("items")).hasSize(2);
+        assertThat(first.get("total").asLong()).isGreaterThanOrEqualTo(3);
+        assertThat(first.get("hasMore").asBoolean()).isTrue();
+
+        JsonNode far = dataOf(mockMvc.perform(
+                get("/api/admin/orders?status=PENDING_PAYMENT&page=999&size=2").session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(far.get("items")).isEmpty();
+        assertThat(far.get("total").asLong()).isEqualTo(first.get("total").asLong());
+        assertThat(far.get("hasMore").asBoolean()).isFalse();
+    }
+
+    @Test
+    @DisplayName("按订单号搜索 — 服务端精确命中那一单")
+    void 按订单号搜索() throws Exception {
+        JsonNode order = createOrder(1, "wxid_find", null);
+        String ref = order.get("orderRef").asText();
+
+        JsonNode hit = dataOf(mockMvc.perform(
+                get("/api/admin/orders?keyword=" + ref).session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(hit.get("total").asLong()).isEqualTo(1);
+        assertThat(hit.get("items").get(0).get("id").asLong()).isEqualTo(order.get("id").asLong());
+    }
+
+    @Test
+    @DisplayName("按粉丝微信号搜索 — 命中该粉丝的单")
+    void 按微信号搜索() throws Exception {
+        JsonNode order = createOrder(1, "wxid_unique_contact", null);
+
+        JsonNode hit = dataOf(mockMvc.perform(
+                get("/api/admin/orders?keyword=unique_contact").session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(idsOfOrders(hit.get("items"))).contains(order.get("id").asLong());
+    }
+
+    @Test
+    @DisplayName("按主播昵称搜索 — 昵称不在订单表上，仍要能搜到")
+    void 按主播昵称搜索() throws Exception {
+        JsonNode order = createOrder(1, "wxid_bytalent", null);
+        // 本用例的主播在 setUp 里叫「小雨」。开发库里可能还有同名的，
+        // 所以只断言「包含自己这一单」，不断言总数。
+
+        JsonNode hit = dataOf(mockMvc.perform(
+                get("/api/admin/orders?keyword=小雨").session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(idsOfOrders(hit.get("items"))).contains(order.get("id").asLong());
+    }
+
+    @Test
+    @DisplayName("搜不到的关键字 — 返回空页而不是全量")
+    void 搜不到返回空页() throws Exception {
+        createOrder(1, "wxid_x", null);
+
+        JsonNode miss = dataOf(mockMvc.perform(
+                get("/api/admin/orders?keyword=这串东西肯定不存在").session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(miss.get("items")).isEmpty();
+        assertThat(miss.get("total").asLong()).isZero();
+    }
+
+    /**
+     * 通配符必须按字面处理。
+     *
+     * 探针设计成「只有当 % 被当成通配符才会命中」：微信号是 wxid_probeXYend，
+     * 搜 "probe%end" —— 转义了就匹配不上（没有字面的 probe%end），
+     * 不转义就会匹配上。再用 "probeXYend" 做对照，确认这一单确实搜得到，
+     * 排除「其实是搜索整个坏掉了」这种假通过。
+     */
+    @Test
+    @DisplayName("关键字里的百分号按字面处理，不当通配符")
+    void 订单搜索百分号不当通配符() throws Exception {
+        JsonNode order = createOrder(1, "wxid_probeXYend", null);
+
+        JsonNode control = dataOf(mockMvc.perform(
+                get("/api/admin/orders").param("keyword", "probeXYend").session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(idsOfOrders(control.get("items")))
+                .as("对照组：这一单本来就该被搜到")
+                .contains(order.get("id").asLong());
+
+        JsonNode wildcard = dataOf(mockMvc.perform(
+                get("/api/admin/orders").param("keyword", "probe%end").session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(idsOfOrders(wildcard.get("items")))
+                .as("% 被当成通配符的话，这里会命中 probeXYend")
+                .doesNotContain(order.get("id").asLong());
+    }
+
+    /** 下划线同理。微信号里下划线很常见，搜错了会多捞一堆。 */
+    @Test
+    @DisplayName("关键字里的下划线按字面处理，不当通配符")
+    void 订单搜索下划线不当通配符() throws Exception {
+        JsonNode order = createOrder(1, "wxidZprobe", null);
+
+        JsonNode wildcard = dataOf(mockMvc.perform(
+                get("/api/admin/orders").param("keyword", "wxid_probe").session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(idsOfOrders(wildcard.get("items")))
+                .as("_ 被当成通配符的话，这里会命中 wxidZprobe")
+                .doesNotContain(order.get("id").asLong());
+    }
+
+    private static java.util.List<Long> idsOfOrders(JsonNode list) {
+        java.util.List<Long> ids = new java.util.ArrayList<>();
+        list.forEach(n -> ids.add(n.get("id").asLong()));
+        return ids;
+    }
+
     // ---------- 5.9 运营取消与退款 ----------
 
     @Test

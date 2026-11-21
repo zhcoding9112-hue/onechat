@@ -1,4 +1,5 @@
 import { http } from '@/api/http'
+import type { PageResponse } from '@/api/types'
 
 /** 打赏状态。比订单少了接单、完成与超时：确认收款后直接计为已完成。 */
 export type TipStatus =
@@ -41,9 +42,23 @@ export interface TipLimits {
 
 const BASE = '/api/admin/tips'
 
+export interface TipQuery {
+  status?: TipStatus
+  /** 同时匹配打赏单号、主播昵称与粉丝昵称，由服务端过滤。 */
+  keyword?: string
+  page?: number
+  size?: number
+}
+
 export const tipAdminApi = {
-  list: (status?: TipStatus) =>
-    http.get<AdminTip[]>(status ? `${BASE}?status=${status}` : BASE),
+  list: (query: TipQuery = {}) => {
+    const params = new URLSearchParams()
+    if (query.status) params.set('status', query.status)
+    if (query.keyword?.trim()) params.set('keyword', query.keyword.trim())
+    params.set('page', String(query.page ?? 0))
+    params.set('size', String(query.size ?? 20))
+    return http.get<PageResponse<AdminTip>>(`${BASE}?${params}`)
+  },
 
   /**
    * 确认收款。打赏不经过订单状态机，确认后直接计为已完成，

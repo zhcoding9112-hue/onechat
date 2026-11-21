@@ -352,7 +352,7 @@ class TippingScenarioTest {
 
         JsonNode list = dataOf(mockMvc.perform(
                 get("/api/admin/tips?status=PENDING_PAYMENT").session(operator))
-                .andExpect(status().isOk()).andReturn());
+                .andExpect(status().isOk()).andReturn()).get("items");
 
         JsonNode row = findById(list, tip.get("id").asLong());
         assertThat(row.get("talentNickname").asText()).isEqualTo("小雨");
@@ -437,7 +437,121 @@ class TippingScenarioTest {
         assertThat(stored.getPaidCents()).isEqualTo(5000);
     }
 
+    @Test
+    @DisplayName("Scenario: 列表分页 — 按页返回，total 是全量条数")
+    void 列表分页() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            create(1000 + i, null);
+        }
+
+        JsonNode firstPage = dataOf(mockMvc.perform(
+                get("/api/admin/tips?status=PENDING_PAYMENT&page=0&size=2").session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(firstPage.get("items")).hasSize(2);
+        assertThat(firstPage.get("total").asLong())
+                .as("total 不受 size 影响")
+                .isGreaterThanOrEqualTo(3);
+        assertThat(firstPage.get("hasMore").asBoolean()).isTrue();
+
+        // 翻到足够靠后的一页必然为空，且 total 不变
+        long total = firstPage.get("total").asLong();
+        JsonNode far = dataOf(mockMvc.perform(
+                get("/api/admin/tips?status=PENDING_PAYMENT&page=999&size=2").session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(far.get("items")).isEmpty();
+        assertThat(far.get("total").asLong()).isEqualTo(total);
+        assertThat(far.get("hasMore").asBoolean()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Scenario: 按主播昵称搜索 — 服务端过滤，不是前端在已加载的列表里找")
+    void 按昵称搜索() throws Exception {
+        JsonNode mine = create(5000, null);
+
+        JsonNode hit = dataOf(mockMvc.perform(
+                get("/api/admin/tips?keyword=小雨").session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(idsOfTips(hit.get("items"))).contains(mine.get("id").asLong());
+
+        JsonNode miss = dataOf(mockMvc.perform(
+                get("/api/admin/tips?keyword=这个昵称不存在").session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(miss.get("items")).isEmpty();
+        assertThat(miss.get("total").asLong()).isZero();
+    }
+
+    @Test
+    @DisplayName("Scenario: 按打赏单号搜索 — 精确命中那一笔")
+    void 按单号搜索() throws Exception {
+        JsonNode mine = create(5000, null);
+        String ref = mine.get("tipRef").asText();
+
+        JsonNode hit = dataOf(mockMvc.perform(
+                get("/api/admin/tips?keyword=" + ref).session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(hit.get("total").asLong()).isEqualTo(1);
+        assertThat(hit.get("items").get(0).get("id").asLong()).isEqualTo(mine.get("id").asLong());
+    }
+
+    /**
+     * 通配符必须按字面处理。
+     *
+     * 探针：打赏单号是 18 位数字，取其中一段把中间两位换成 % 去搜。
+     * 转义了就匹配不上，不转义就会命中原单。再用原始片段做对照，
+     * 排除「其实是搜索整个坏掉了」这种假通过。
+     */
+    @Test
+    @DisplayName("Scenario: 关键字里的百分号按字面处理，不当通配符")
+    void 百分号不当通配符() throws Exception {
+        JsonNode mine = create(5000, null);
+        long id = mine.get("id").asLong();
+        String ref = mine.get("tipRef").asText();
+        String head = ref.substring(0, 8);
+        String tail = ref.substring(10);
+
+        JsonNode control = dataOf(mockMvc.perform(
+                get("/api/admin/tips").param("keyword", ref).session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(idsOfTips(control.get("items")))
+                .as("对照组：完整单号本来就该搜得到")
+                .contains(id);
+
+        JsonNode wildcard = dataOf(mockMvc.perform(
+                get("/api/admin/tips").param("keyword", head + "%" + tail).session(operator))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(idsOfTips(wildcard.get("items")))
+                .as("% 被当成通配符的话，这里会命中原单")
+                .doesNotContain(id);
+    }
+
+    /** 下划线同理。 */
+    @Test
+    @DisplayName("Scenario: 关键字里的下划线按字面处理，不当通配符")
+    void 下划线不当通配符() throws Exception {
+        JsonNode mine = create(5000, null);
+        long id = mine.get("id").asLong();
+        String ref = mine.get("tipRef").asText();
+
+        JsonNode wildcard = dataOf(mockMvc.perform(
+                get("/api/admin/tips")
+                        .param("keyword", ref.substring(0, 8) + "_" + ref.substring(9))
+                        .session(operator))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(idsOfTips(wildcard.get("items")))
+                .as("_ 被当成通配符的话，这里会命中原单")
+                .doesNotContain(id);
+    }
+
     // ---------- 辅助 ----------
+
+    private static java.util.List<Long> idsOfTips(JsonNode list) {
+        java.util.List<Long> ids = new java.util.ArrayList<>();
+        list.forEach(n -> ids.add(n.get("id").asLong()));
+        return ids;
+    }
 
     private JsonNode findById(JsonNode list, long id) {
         for (JsonNode node : list) {

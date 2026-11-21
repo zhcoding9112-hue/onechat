@@ -3,6 +3,8 @@ package com.guild.checkout.order.admin;
 import com.guild.checkout.auth.CurrentUserHolder;
 import com.guild.checkout.auth.RequireRole;
 import com.guild.checkout.common.api.ApiResponse;
+import com.guild.checkout.common.api.PageResponse;
+import com.guild.checkout.common.api.Pageables;
 import com.guild.checkout.order.OrderDeadlineProvider;
 import com.guild.checkout.order.OrderDeadlineSetting;
 import com.guild.checkout.order.OrderService;
@@ -11,6 +13,8 @@ import com.guild.checkout.order.OrderView;
 import com.guild.checkout.order.OrderViewAssembler;
 import com.guild.checkout.order.ServiceOrder;
 import com.guild.checkout.order.ServiceOrderMapper;
+import com.guild.checkout.talent.Talent;
+import com.guild.checkout.talent.TalentService;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.guild.checkout.user.UserRole;
 import jakarta.validation.Valid;
@@ -38,15 +42,18 @@ public class OrderAdminController {
     private final OrderViewAssembler assembler;
     private final ServiceOrderMapper orderMapper;
     private final OrderDeadlineProvider deadlines;
+    private final TalentService talentService;
 
     public OrderAdminController(OrderService orderService,
                                 OrderViewAssembler assembler,
                                 ServiceOrderMapper orderMapper,
-                                OrderDeadlineProvider deadlines) {
+                                OrderDeadlineProvider deadlines,
+                                TalentService talentService) {
         this.orderService = orderService;
         this.assembler = assembler;
         this.orderMapper = orderMapper;
         this.deadlines = deadlines;
+        this.talentService = talentService;
     }
 
     // ---------- 时限配置 ----------
@@ -73,15 +80,54 @@ public class OrderAdminController {
             @Size(max = 255, message = "原因不超过 255 字符") String reason) {
     }
 
-    /** 订单列表，可按状态过滤。 */
+    /**
+     * 订单列表：按状态过滤、按关键字搜索、分页。
+     *
+     * keyword 同时匹配订单号、粉丝微信号与主播昵称。昵称不在 service_order 上，
+     * 所以先用昵称去 talent 表捞出 id 再 IN——主播表很小，比给订单表做联表
+     * 划算，也不用为搜索引入新的 SQL 映射文件。
+     */
     @GetMapping
-    public ApiResponse<List<OrderView>> list(@RequestParam(required = false) String status) {
+    public ApiResponse<PageResponse<OrderView>> list(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+
+        int p = Pageables.page(page);
+        int s = Pageables.size(size);
+
         var query = Wrappers.<ServiceOrder>lambdaQuery();
         if (status != null && !status.isBlank()) {
             query.eq(ServiceOrder::getStatus, OrderStatus.valueOf(status).name());
         }
-        return ApiResponse.ok(orderMapper.selectList(query.orderByDesc(ServiceOrder::getId))
-                .stream().map(o -> assembler.assemble(o, OrderViewAssembler.Viewer.OPERATOR)).toList());
+        if (!Pageables.blank(keyword)) {
+            String like = Pageables.like(keyword);
+            List<Long> talentIds = talentService.listAll().stream()
+                    .filter(t -> matches(t.getNickname(), keyword))
+                    .map(Talent::getId)
+                    .toList();
+            query.and(w -> {
+                w.apply("LOWER(order_ref) LIKE {0}" + Pageables.ESCAPE_CLAUSE, like)
+                        .or().apply("LOWER(contact) LIKE {0}" + Pageables.ESCAPE_CLAUSE, like);
+                if (!talentIds.isEmpty()) {
+                    w.or().in(ServiceOrder::getTalentId, talentIds);
+                }
+            });
+        }
+
+        long total = orderMapper.selectCount(query);
+        List<OrderView> items = orderMapper.selectList(query
+                        .orderByDesc(ServiceOrder::getId)
+                        .last("LIMIT " + s + " OFFSET " + Pageables.offset(p, s)))
+                .stream().map(o -> assembler.assemble(o, OrderViewAssembler.Viewer.OPERATOR)).toList();
+        return ApiResponse.ok(PageResponse.of(items, total, p, s));
+    }
+
+    private static boolean matches(String value, String keyword) {
+        return value != null
+                && value.toLowerCase(java.util.Locale.ROOT)
+                        .contains(keyword.trim().toLowerCase(java.util.Locale.ROOT));
     }
 
     /** 待退款队列：已超时但尚未标记退款的订单。 */

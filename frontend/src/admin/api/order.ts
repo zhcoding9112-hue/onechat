@@ -1,4 +1,5 @@
 import { http } from '@/api/http'
+import type { PageResponse } from '@/api/types'
 
 /** 运营看到的订单。字段与后端 OrderView 一致。 */
 export interface AdminOrder {
@@ -49,11 +50,23 @@ export interface OrderHistoryEntry {
   occurredAt: string
 }
 
+export interface OrderQuery {
+  status?: string
+  /** 同时匹配订单号、粉丝微信号与主播昵称，由服务端过滤。 */
+  keyword?: string
+  page?: number
+  size?: number
+}
+
 export const orderAdminApi = {
-  list: (status?: string) =>
-    http.get<AdminOrder[]>(
-      status ? `/api/admin/orders?status=${encodeURIComponent(status)}` : '/api/admin/orders',
-    ),
+  list: (query: OrderQuery = {}) => {
+    const params = new URLSearchParams()
+    if (query.status) params.set('status', query.status)
+    if (query.keyword?.trim()) params.set('keyword', query.keyword.trim())
+    params.set('page', String(query.page ?? 0))
+    params.set('size', String(query.size ?? 20))
+    return http.get<PageResponse<AdminOrder>>(`/api/admin/orders?${params}`)
+  },
 
   /** 待退款队列：已超时但尚未标记退款的订单，最早超时的在前。 */
   refundQueue: () => http.get<AdminOrder[]>('/api/admin/orders/refund-queue'),

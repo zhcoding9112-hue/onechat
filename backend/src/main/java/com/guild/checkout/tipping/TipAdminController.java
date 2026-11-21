@@ -3,6 +3,8 @@ package com.guild.checkout.tipping;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.guild.checkout.auth.RequireRole;
 import com.guild.checkout.common.api.ApiResponse;
+import com.guild.checkout.common.api.PageResponse;
+import com.guild.checkout.common.api.Pageables;
 import com.guild.checkout.talent.Talent;
 import com.guild.checkout.talent.TalentService;
 import com.guild.checkout.user.AppUser;
@@ -91,15 +93,51 @@ public class TipAdminController {
             LocalDateTime createdAt) {
     }
 
+    /**
+     * 打赏列表：按状态过滤、按关键字搜索、分页。
+     *
+     * keyword 匹配打赏单号、主播昵称与粉丝昵称。后两者都不在 tip_record 上，
+     * 先各自捞出 id 再 IN，理由同订单侧。
+     */
     @GetMapping
-    public ApiResponse<List<TipAdminView>> list(@RequestParam(required = false) String status) {
+    public ApiResponse<PageResponse<TipAdminView>> list(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+
+        int p = Pageables.page(page);
+        int sz = Pageables.size(size);
+
         var query = Wrappers.<TipRecord>lambdaQuery();
         if (status != null && !status.isBlank()) {
             query.eq(TipRecord::getStatus, TipStatus.valueOf(status).name());
         }
-        List<TipRecord> tips = tipMapper.selectList(query.orderByDesc(TipRecord::getId));
+        if (!Pageables.blank(keyword)) {
+            String like = Pageables.like(keyword);
+            List<Long> talentIds = talentService.listAll().stream()
+                    .filter(t -> matches(t.getNickname(), keyword))
+                    .map(Talent::getId).toList();
+            List<Long> fanIds = userMapper.selectList(Wrappers.<AppUser>lambdaQuery()
+                            .apply("LOWER(nickname) LIKE {0}" + Pageables.ESCAPE_CLAUSE, like))
+                    .stream().map(AppUser::getId).toList();
+            query.and(w -> {
+                w.apply("LOWER(tip_ref) LIKE {0}" + Pageables.ESCAPE_CLAUSE, like);
+                if (!talentIds.isEmpty()) {
+                    w.or().in(TipRecord::getTalentId, talentIds);
+                }
+                if (!fanIds.isEmpty()) {
+                    w.or().in(TipRecord::getFanUserId, fanIds);
+                }
+            });
+        }
+
+        long total = tipMapper.selectCount(query);
+        List<TipRecord> tips = tipMapper.selectList(query
+                .orderByDesc(TipRecord::getId)
+                .last("LIMIT " + sz + " OFFSET " + Pageables.offset(p, sz)));
         if (tips.isEmpty()) {
-            return ApiResponse.ok(List.of());
+            return ApiResponse.ok(PageResponse.of(List.of(), total, p, sz));
         }
 
         // 昵称一次批量查出来，不在循环里逐条查
@@ -110,7 +148,7 @@ public class TipAdminController {
                 .collect(Collectors.toMap(AppUser::getId,
                         u -> UserDisplay.nickname(u.getNickname(), u.getId())));
 
-        return ApiResponse.ok(tips.stream().map(t -> {
+        List<TipAdminView> items = tips.stream().map(t -> {
             Talent talent = talentService.find(t.getTalentId());
             TipStatus st = t.statusEnum();
             return new TipAdminView(
@@ -124,7 +162,14 @@ public class TipAdminController {
                     st.name(), st.label(), t.getMessage(),
                     t.getPayDeadline(), t.getPaidAt(), t.getClosedAt(), t.getCloseReason(),
                     t.getCreatedAt());
-        }).toList());
+        }).toList();
+        return ApiResponse.ok(PageResponse.of(items, total, p, sz));
+    }
+
+    private static boolean matches(String value, String keyword) {
+        return value != null
+                && value.toLowerCase(java.util.Locale.ROOT)
+                        .contains(keyword.trim().toLowerCase(java.util.Locale.ROOT));
     }
 
     @PutMapping("/{tipId}/confirm")
