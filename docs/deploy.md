@@ -238,6 +238,13 @@ sudo chown pcapp:pcapp /opt/private-checkout/env
 > 应用会**直接启动失败**而不是退化成「任何人都能以任意 openid 登录」的授权桩。
 > 这是故意的——宁可起不来，也不能悄悄变成谁都能登录。
 
+> `STORAGE_ROOT` 必须是**绝对路径**，prod 下给相对路径同样会启动失败。
+> 原因是默认值 `./uploads` 相对的是进程工作目录：systemd 改了 `WorkingDirectory`、
+> 或者有人手动在别的目录 `java -jar` 试一下，就等于换了一个空的文件库。
+> 已上传的封面、试听、支付凭证会全部变成裂图，但数据库里的地址还在、
+> 请求也不报错，没有任何一处日志会喊——开发期就是靠肉眼发现的。
+> 换服务器或改目录时，`uploads/` 要和数据库一起迁移，它不在备份脚本的默认范围里。
+
 ### 4. systemd 服务
 
 ```bash
@@ -437,6 +444,17 @@ sudo crontab -u pcapp -e
 
 - [ ] 手动跑一次 `backup-db.sh`，确认产出了 `.sql.gz`
 - [ ] 跑一次 `restore-db.sh`，确认能恢复出库并用它启动应用
+
+`backup-db.sh` 只备份数据库，**不含 `uploads/`**。单靠它恢复出来的站点，
+数据库里每条封面、试听、支付凭证的地址都还在，文件却一个都没有——
+页面不报错，只是全站图裂、试听点不开、凭证查不到。再加一行把文件也带上：
+
+```bash
+# 每天凌晨三点半，增量同步上传目录
+30 3 * * * rsync -a --delete /opt/private-checkout/uploads/ /opt/private-checkout/backups/uploads/ >> /opt/private-checkout/logs/backup.log 2>&1
+```
+
+- [ ] 确认 `backups/` 和 `uploads/` 不在同一块盘上，否则盘坏了两份一起没
 
 ---
 

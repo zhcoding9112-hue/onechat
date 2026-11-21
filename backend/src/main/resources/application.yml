@@ -88,6 +88,12 @@ order:
 
 storage:
   # 本地存储根目录。上线接对象存储时换 FileStorage 实现即可，业务侧不动。
+  #
+  # 注意默认值 ./uploads 是相对**进程工作目录**的：同一个服务从不同目录启动
+  # 就是两个互不相干的文件库，之前传的封面、试听、支付凭证全部变成裂图，
+  # 而数据库里的地址还在、页面也不报错。开发期踩过一次。
+  # 所以 prod profile 下必须给绝对路径，否则应用直接启动失败
+  # （见 LocalFileStorage.requireAbsoluteInProd）。
   root-dir: ${STORAGE_ROOT:./uploads}
   public-prefix: ${STORAGE_PUBLIC_PREFIX:/uploads}
 

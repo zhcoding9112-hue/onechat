@@ -16,14 +16,17 @@ import java.nio.file.Path;
 public class StorageConfig implements WebMvcConfigurer {
 
     private final StorageProperties properties;
+    private final org.springframework.core.env.Environment environment;
 
-    public StorageConfig(StorageProperties properties) {
+    public StorageConfig(StorageProperties properties,
+                         org.springframework.core.env.Environment environment) {
         this.properties = properties;
+        this.environment = environment;
     }
 
     @Bean
     public FileStorage fileStorage() {
-        return new LocalFileStorage(properties);
+        return new LocalFileStorage(properties, environment);
     }
 
     @Override
