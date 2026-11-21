@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -30,8 +32,11 @@ public class TalentAdminController {
 
     private final TalentAdminService adminService;
     private final TalentService talentService;
+    private final TalentImportService importService;
 
-    public TalentAdminController(TalentAdminService adminService, TalentService talentService) {
+    public TalentAdminController(TalentAdminService adminService, TalentService talentService,
+                                 TalentImportService importService) {
+        this.importService = importService;
         this.adminService = adminService;
         this.talentService = talentService;
     }
@@ -151,5 +156,44 @@ public class TalentAdminController {
                 t.getGender(), t.getAge(), t.getRegion(),
                 java.util.stream.Stream.of(t.getPromoTag1(), t.getPromoTag2())
                         .filter(java.util.Objects::nonNull).toList());
+    }
+
+    // ---------- 批量导入 ----------
+
+    public record ImportRequest(String csv, Boolean dryRun) {
+    }
+
+    /**
+     * 批量导入花名册。
+     *
+     * dryRun=true 只校验不写库——几十行的表格里有一个错字，
+     * 先试算一遍比导进去再收拾划算得多。
+     */
+    @PostMapping("/import")
+    public ApiResponse<TalentImportService.ImportResult> importCsv(
+            @RequestBody ImportRequest req) {
+        boolean dryRun = Boolean.TRUE.equals(req.dryRun());
+        try {
+            return ApiResponse.ok(importService.importCsv(req.csv(), dryRun));
+        } catch (TalentImportService.DryRunComplete done) {
+            return ApiResponse.ok(done.result());
+        } catch (TalentImportService.ImportFailed failed) {
+            // 带着逐行结果回去，运营照着行号改表
+            throw new com.guild.checkout.common.exception.BusinessException(failed.getMessage());
+        }
+    }
+
+    /** CSV 模板。带表头与一行示例，直接另存为就能填。 */
+    @GetMapping("/import/template")
+    public ResponseEntity<Resource> template() {
+        String csv = "\uFEFF"
+                + String.join(",", TalentImportService.HEADERS) + "\n"
+                + "小雨,女,23,杭州,\"温柔，耐心，喜欢听人说话\",温柔|耐心|夜猫子,深夜电台|声音很治愈,10,listen:m30,25\n";
+        byte[] body = csv.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"talents-template.csv\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body(new org.springframework.core.io.ByteArrayResource(body));
     }
 }

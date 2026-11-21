@@ -61,6 +61,21 @@ export const AUDIO_TYPES = [
 
 const BASE = '/api/admin/talents'
 
+export interface ImportRowResult {
+  line: number
+  ok: boolean
+  talentId: number | null
+  nickname: string
+  message: string
+}
+
+export interface ImportResult {
+  dryRun: boolean
+  created: number
+  failed: number
+  rows: ImportRowResult[]
+}
+
 export const talentAdminApi = {
   list: () => http.get<TalentAdminView[]>(BASE),
   detail: (id: number) => http.get<TalentAdminView>(`${BASE}/${id}`),
@@ -71,6 +86,15 @@ export const talentAdminApi = {
     http.put<TalentAdminView>(`${BASE}/${id}/listed/${listed}`),
   setTags: (id: number, tags: string[]) =>
     http.put<TalentAdminView>(`${BASE}/${id}/tags`, { tags }),
+
+  /**
+   * 批量导入花名册。
+   *
+   * dryRun=true 只校验不写库。几十行里有一个错字，先试算一遍比导进去再收拾划算。
+   * 任何一行有问题都整批不导——导到一半最难收拾。
+   */
+  importCsv: (csv: string, dryRun: boolean) =>
+    http.post<ImportResult>(`${BASE}/import`, { csv, dryRun }),
 
   /** 上传封面图。成功后旧封面文件由后端删除。 */
   uploadCover: (id: number, file: File) => {

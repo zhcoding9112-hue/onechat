@@ -10,6 +10,7 @@ import {
   MAX_COVER_BYTES,
   type Gender,
   type TalentAdminView,
+  type ImportResult,
   type TalentProfilePayload,
 } from '@/admin/api/talent'
 import { readAudioSeconds } from '@/utils/audioDuration'
@@ -148,6 +149,13 @@ const media = reactive({
 })
 
 const coverInput = ref<HTMLInputElement | null>(null)
+
+const IMPORT_HEADER = '昵称,性别,年龄,地区,简介,标签,宣传语,排序,服务档位,价格元'
+
+/** 模板由后端给，带 BOM 与一行示例，Excel 打开不乱码。 */
+function downloadTemplate() {
+  window.location.assign('/api/admin/talents/import/template')
+}
 const audioInput = ref<HTMLInputElement | null>(null)
 
 function openMedia(row: TalentAdminView) {
@@ -259,6 +267,43 @@ async function refreshMediaRow() {
   media.row = rows.value.find((r) => r.id === id) ?? media.row
 }
 
+// ---------- 批量导入 ----------
+
+const imp = reactive({
+  visible: false,
+  csv: '',
+  busy: false,
+  result: null as ImportResult | null,
+})
+
+function openImport() {
+  Object.assign(imp, { visible: true, csv: '', busy: false, result: null })
+}
+
+async function runImport(dryRun: boolean) {
+  if (!imp.csv.trim()) {
+    ElMessage.warning('先把表格内容贴进来')
+    return
+  }
+  imp.busy = true
+  imp.result = null
+  try {
+    imp.result = await talentAdminApi.importCsv(imp.csv, dryRun)
+    if (dryRun) {
+      ElMessage.success(`试算通过，${imp.result.created} 行没有问题，可以正式导入了`)
+    } else {
+      ElMessage.success(`已导入 ${imp.result.created} 位`)
+      imp.visible = false
+      await reload()
+    }
+  } catch (e) {
+    // 哪一行出的问题在后端的报错里，统一通路已经弹出来了
+    if (!(e instanceof ApiError)) throw e
+  } finally {
+    imp.busy = false
+  }
+}
+
 function durationText(seconds: number | null) {
   if (!seconds) return ''
   const m = Math.floor(seconds / 60)
@@ -271,6 +316,7 @@ function durationText(seconds: number | null) {
   <div class="page">
     <div class="head">
       <h2>主播管理</h2>
+      <el-button @click="openImport">批量导入</el-button>
       <el-button type="primary" @click="openCreate">新建主播</el-button>
     </div>
 
@@ -374,6 +420,56 @@ function durationText(seconds: number | null) {
       <template #footer>
         <el-button @click="form.visible = false">取消</el-button>
         <el-button type="primary" :loading="form.saving" @click="save">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="imp.visible" title="批量导入花名册" width="720px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">
+        <template #title>先试算，再导入</template>
+        表格里有一个错字就整批不导——导到一半最难收拾：不知道哪些进去了，
+        重导又会撞昵称。所以先点「试算」，把错改干净再点「正式导入」。
+        <strong>封面与试听不在这里导</strong>，它们是文件，导完回列表逐个点「素材」传。
+        导进来的主播<strong>一律不上架</strong>，素材齐了再上。
+      </el-alert>
+
+      <p class="hint-block" style="margin-bottom: 8px">
+        第一行必须是表头：<code>{{ IMPORT_HEADER }}</code><br />
+        标签与宣传语用竖线分隔（如 <code>温柔|耐心</code>）；
+        服务档位填「项目编码:档位编码」（如 <code>listen:m30</code>），
+        与价格要么都填、要么都留空。
+        <el-button link type="primary" @click="downloadTemplate">下载模板</el-button>
+      </p>
+
+      <el-input
+        v-model="imp.csv"
+        type="textarea"
+        :rows="10"
+        placeholder="把 CSV 内容整个贴进来，含表头"
+        style="font-family: ui-monospace, Menlo, monospace"
+      />
+
+      <el-table
+        v-if="imp.result && imp.result.rows.length"
+        :data="imp.result.rows"
+        size="small"
+        max-height="220"
+        style="margin-top: 12px"
+      >
+        <el-table-column label="行" width="60" prop="line" />
+        <el-table-column label="昵称" min-width="140" prop="nickname" />
+        <el-table-column label="结果" min-width="200">
+          <template #default="{ row }">
+            <span :class="row.ok ? 'ok' : 'bad'">{{ row.message }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="imp.visible = false">取消</el-button>
+        <el-button :loading="imp.busy" @click="runImport(true)">试算</el-button>
+        <el-button type="primary" :loading="imp.busy" @click="runImport(false)">
+          正式导入
+        </el-button>
       </template>
     </el-dialog>
 
@@ -523,6 +619,12 @@ function durationText(seconds: number | null) {
   display: flex;
   gap: 8px;
   width: 100%;
+}
+.ok {
+  color: #67c23a;
+}
+.bad {
+  color: #f56c6c;
 }
 .hint {
   margin-left: 8px;
