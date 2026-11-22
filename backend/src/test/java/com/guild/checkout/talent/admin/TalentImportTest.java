@@ -42,7 +42,12 @@ class TalentImportTest {
     /** 同一个项目下的另外两档，用来验一行多档多价。 */
     private String specCode15;
     private String specCode60;
+    /** 启用项目下的一个停用档位。 */
+    private String disabledSpecCode;
+    /** 停用项目下的一个启用档位。 */
+    private String disabledItemSpecCode;
     private long itemId;
+    private long disabledItemId;
     /** 本次用例的昵称后缀。开发库里本来就有「阿澈」，不加后缀会找错人。 */
     private String suffix;
 
@@ -58,6 +63,19 @@ class TalentImportTest {
                 item.getId(), "m15", "15分钟", 15, 10).getCode();
         specCode60 = itemCode + ":" + catalogService.createSpec(
                 item.getId(), "m60", "60分钟", 60, 30).getCode();
+
+        // 启用项目下的停用档位
+        ServiceSpec off = catalogService.createSpec(item.getId(), "off", "停用档", 90, 90);
+        catalogService.setSpecEnabled(off.getId(), false);
+        disabledSpecCode = itemCode + ":" + off.getCode();
+
+        // 整个项目停用，但它下面的档位是启用的
+        String offItemCode = "impoff" + suffix;
+        ServiceItem offItem = catalogService.createItem(offItemCode, "停用的导入测试项目", null, 0);
+        disabledItemId = offItem.getId();
+        disabledItemSpecCode = offItemCode + ":"
+                + catalogService.createSpec(offItem.getId(), "m30", "30分钟", 30, 0).getCode();
+        catalogService.setItemEnabled(offItem.getId(), false);
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -72,6 +90,10 @@ class TalentImportTest {
                 + " (SELECT id FROM service_spec WHERE service_item_id = ?)", itemId);
         jdbc.update("DELETE FROM service_spec WHERE service_item_id = ?", itemId);
         jdbc.update("DELETE FROM service_item WHERE id = ?", itemId);
+        jdbc.update("DELETE FROM talent_price WHERE service_spec_id IN"
+                + " (SELECT id FROM service_spec WHERE service_item_id = ?)", disabledItemId);
+        jdbc.update("DELETE FROM service_spec WHERE service_item_id = ?", disabledItemId);
+        jdbc.update("DELETE FROM service_item WHERE id = ?", disabledItemId);
     }
 
     /** 昵称都带本次后缀，避免撞上开发库里已有的同名主播。 */
@@ -229,6 +251,54 @@ class TalentImportTest {
                 + specCode15 + "|" + specCode + ",9||15\n", false))
                 .isInstanceOf(TalentImportService.ImportFailed.class)
                 .hasMessageContaining("有空项");
+    }
+
+    // ---------- 停用的项目与档位 ----------
+
+    /**
+     * 停用不拦，但必须说出来。
+     *
+     * 提前把价配好、等项目一启用就生效，是合理用法；可要是不声不响地接受，
+     * 运营会以为导完就能卖，而粉丝端一个档位都看不到。
+     */
+    @Test
+    @DisplayName("停用项目的档位：价格照样设上，但结果里要标出来")
+    void 停用项目要提示() {
+        var result = importService.importCsv(HEADER
+                + name("阿雨") + ",女,23,杭州,简介,标签,,0,"
+                + specCode + "|" + disabledItemSpecCode + ",15|25\n", false);
+
+        var row = result.rows().get(0);
+        assertThat(row.ok()).isTrue();
+        assertThat(row.hiddenSpecs())
+                .as("只有停用项目那一档该被标出来")
+                .hasSize(1);
+        assertThat(row.hiddenSpecs().get(0)).contains(disabledItemSpecCode).contains("项目已停用");
+        assertThat(row.message()).contains("粉丝端暂不可见");
+
+        // 价格仍然落库：启用之后立刻生效，不用重导
+        assertThat(priceService.listByTalent(findByNickname(name("阿雨")).getId())).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("档位自己停用（项目是启用的）也要标出来，原因写「档位已停用」")
+    void 停用档位要提示() {
+        var result = importService.importCsv(HEADER
+                + name("阿雨") + ",女,23,杭州,简介,标签,,0," + disabledSpecCode + ",15\n", false);
+
+        assertThat(result.rows().get(0).hiddenSpecs())
+                .singleElement().asString().contains("档位已停用");
+    }
+
+    @Test
+    @DisplayName("都是启用的就不要提示，别制造假警报")
+    void 正常档位不提示() {
+        var result = importService.importCsv(HEADER
+                + name("阿雨") + ",女,23,杭州,简介,标签,,0,"
+                + specCode15 + "|" + specCode + ",9|15\n", false);
+
+        assertThat(result.rows().get(0).hiddenSpecs()).isEmpty();
+        assertThat(result.rows().get(0).message()).doesNotContain("不可见");
     }
 
     @Test

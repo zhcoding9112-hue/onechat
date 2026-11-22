@@ -53,8 +53,12 @@ public class TalentImportService {
      * @param ok      这一行是否成功
      * @param talentId 成功时的主播 id
      * @param message 失败原因，或成功时的说明
+     * @param hiddenSpecs 价格设上了但粉丝端看不见的档位（所属项目或档位本身已停用），
+     *                    每项形如「call:m30（项目已停用）」。前端据此单独提示，
+     *                    不去解析 message 里的中文
      */
-    public record RowResult(int line, boolean ok, Long talentId, String nickname, String message) {
+    public record RowResult(int line, boolean ok, Long talentId, String nickname, String message,
+                            List<String> hiddenSpecs) {
     }
 
     /**
@@ -92,7 +96,7 @@ public class TalentImportService {
             throw new BusinessException("单次最多导入 %d 行，收到 %d 行".formatted(MAX_ROWS, body.size()));
         }
 
-        Map<String, ServiceSpec> specs = specsByCode();
+        Map<String, CatalogEntry> specs = specsByCode();
         List<RowResult> results = new ArrayList<>();
         int created = 0;
         int failed = 0;
@@ -104,7 +108,7 @@ public class TalentImportService {
                 results.add(importRow(line, row, specs));
                 created++;
             } catch (BusinessException | IllegalArgumentException ex) {
-                results.add(new RowResult(line, false, null, cell(row, 0), ex.getMessage()));
+                results.add(new RowResult(line, false, null, cell(row, 0), ex.getMessage(), List.of()));
                 failed++;
             }
         }
@@ -126,7 +130,7 @@ public class TalentImportService {
         return new ImportResult(false, created, 0, results);
     }
 
-    private RowResult importRow(int line, String[] row, Map<String, ServiceSpec> specs) {
+    private RowResult importRow(int line, String[] row, Map<String, CatalogEntry> specs) {
         String nickname = cell(row, 0);
         if (nickname.isEmpty()) {
             throw new BusinessException("昵称为必填");
@@ -147,15 +151,20 @@ public class TalentImportService {
             talentAdminService.replaceTags(talent.getId(), tags);
         }
 
-        int priced = applyPrices(talent.getId(), cell(row, 8), cell(row, 9), specs);
-        String note = switch (priced) {
+        PriceOutcome priced = applyPrices(talent.getId(), cell(row, 8), cell(row, 9), specs);
+        String note = switch (priced.count()) {
             case 0 -> "已建档";
             case 1 -> "已建档并设价";
-            default -> "已建档并设价 %d 档".formatted(priced);
+            default -> "已建档并设价 %d 档".formatted(priced.count());
         };
+        if (!priced.hidden().isEmpty()) {
+            // 价格是存下来了，但粉丝端此刻看不见。不说出来的话，运营会以为导完就能卖
+            note += "；%s，粉丝端暂不可见，启用后即生效"
+                    .formatted(String.join("、", priced.hidden()));
+        }
 
         // 不自动上架：封面与试听还没传，上架就会在粉丝端留白
-        return new RowResult(line, true, talent.getId(), nickname, note);
+        return new RowResult(line, true, talent.getId(), nickname, note, priced.hidden());
     }
 
     /**
@@ -169,12 +178,12 @@ public class TalentImportService {
      * 为什么不允许「一个价配多个档位」：30 分钟和 120 分钟卖同一个价，
      * 几乎只会是填错，而不是真的想这么定价。个数不等就报错，别替运营猜。
      *
-     * @return 这一行实际设了几档价
+     * @return 设了几档价，以及其中哪几档粉丝端暂时看不见
      */
-    private int applyPrices(long talentId, String specCell, String priceCell,
-                            Map<String, ServiceSpec> specs) {
+    private PriceOutcome applyPrices(long talentId, String specCell, String priceCell,
+                                     Map<String, CatalogEntry> specs) {
         if (specCell.isEmpty() && priceCell.isEmpty()) {
-            return 0;
+            return new PriceOutcome(0, List.of());
         }
         if (specCell.isEmpty() || priceCell.isEmpty()) {
             throw new BusinessException("「服务档位」与「价格元」要么都填，要么都留空");
@@ -190,19 +199,51 @@ public class TalentImportService {
 
         // 同一档位在一行里出现两次：后一个会把前一个覆盖掉，静默生效最难查，直接报错
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        List<String> hidden = new ArrayList<>();
         for (int i = 0; i < specCodes.size(); i++) {
             String code = specCodes.get(i).toLowerCase(Locale.ROOT);
             if (!seen.add(code)) {
                 throw new BusinessException("服务档位「%s」在同一行里填了两次".formatted(specCodes.get(i)));
             }
-            ServiceSpec spec = specs.get(code);
-            if (spec == null) {
+            CatalogEntry entry = specs.get(code);
+            if (entry == null) {
                 throw new BusinessException("找不到服务档位「%s」，现有：%s"
                         .formatted(specCodes.get(i), String.join("、", specs.keySet())));
             }
-            priceService.setPrice(talentId, spec.getId(), yuanToCents(prices.get(i)), true);
+            priceService.setPrice(talentId, entry.spec().getId(), yuanToCents(prices.get(i)), true);
+
+            // 停用的不拦：提前把价配好、到时候一启用就生效，是合理用法。
+            // 但必须说出来——否则运营以为导完就能卖，而粉丝端一个档位都看不到。
+            String why = entry.hiddenReason();
+            if (why != null) {
+                hidden.add("%s（%s）".formatted(specCodes.get(i), why));
+            }
         }
-        return specCodes.size();
+        return new PriceOutcome(specCodes.size(), List.copyOf(hidden));
+    }
+
+    /** 设价结果：设了几档，以及其中哪几档粉丝端此刻看不见。 */
+    private record PriceOutcome(int count, List<String> hidden) {
+    }
+
+    /**
+     * 档位连同它所属的项目。
+     *
+     * 只拿 ServiceSpec 不够：档位自己是启用的，但所属项目停用了，
+     * 粉丝端照样一个档位都看不到——判断「能不能卖」必须两头都看。
+     */
+    private record CatalogEntry(ServiceSpec spec, ServiceItem item) {
+
+        /** 粉丝端看不见的原因；看得见则为 null。 */
+        String hiddenReason() {
+            if (!Boolean.TRUE.equals(item.getEnabled())) {
+                return "项目已停用";
+            }
+            if (!Boolean.TRUE.equals(spec.getEnabled())) {
+                return "档位已停用";
+            }
+            return null;
+        }
     }
 
     /**
@@ -224,12 +265,18 @@ public class TalentImportService {
         return out;
     }
 
-    /** 档位按「项目编码:档位编码」索引，例如 listen:m30。 */
-    private Map<String, ServiceSpec> specsByCode() {
-        Map<String, ServiceSpec> out = new HashMap<>();
+    /**
+     * 档位按「项目编码:档位编码」索引，例如 listen:m30。
+     *
+     * 刻意**不过滤停用的**项目与档位：运营可能想提前把价配好，等一启用就生效。
+     * 代价是得把停用的那几档在结果里标出来，见 {@link CatalogEntry#hiddenReason()}。
+     */
+    private Map<String, CatalogEntry> specsByCode() {
+        Map<String, CatalogEntry> out = new HashMap<>();
         for (ServiceItem item : catalogService.listItems()) {
             for (ServiceSpec spec : catalogService.listSpecs(item.getId())) {
-                out.put((item.getCode() + ":" + spec.getCode()).toLowerCase(Locale.ROOT), spec);
+                out.put((item.getCode() + ":" + spec.getCode()).toLowerCase(Locale.ROOT),
+                        new CatalogEntry(spec, item));
             }
         }
         return out;

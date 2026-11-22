@@ -67,6 +67,13 @@ export interface ImportRowResult {
   talentId: number | null
   nickname: string
   message: string
+  /**
+   * 价格设上了、但粉丝端此刻看不见的档位（所属项目或档位本身已停用），
+   * 每项形如「call:m30（项目已停用）」。
+   *
+   * 后端给的是结构化字段，前端据此提示，不去解析 message 里的中文。
+   */
+  hiddenSpecs: string[]
 }
 
 export interface ImportResult {

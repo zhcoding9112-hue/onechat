@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/api/http'
 import {
@@ -280,6 +280,12 @@ function openImport() {
   Object.assign(imp, { visible: true, csv: '', busy: false, result: null })
 }
 
+/** 这一批里设上了价、但粉丝端看不见的档位。 */
+const hiddenRows = computed(() => (imp.result?.rows ?? []).filter((r) => r.hiddenSpecs?.length))
+const hiddenCount = computed(() =>
+  hiddenRows.value.reduce((sum, r) => sum + r.hiddenSpecs.length, 0),
+)
+
 async function runImport(dryRun: boolean) {
   if (!imp.csv.trim()) {
     ElMessage.warning('先把表格内容贴进来')
@@ -293,6 +299,16 @@ async function runImport(dryRun: boolean) {
       ElMessage.success(`试算通过，${imp.result.created} 行没有问题，可以正式导入了`)
     } else {
       ElMessage.success(`已导入 ${imp.result.created} 位`)
+      // 正式导入成功后对话框会关掉，结果表格跟着消失——停用项目的提示只能在这里说，
+      // 否则这条提醒等于没有
+      if (hiddenCount.value > 0) {
+        ElMessage({
+          type: 'warning',
+          duration: 8000,
+          showClose: true,
+          message: `其中 ${hiddenCount.value} 档价格所属的服务项目或档位已停用，粉丝端暂不可见；去「服务与价格」启用后才会出现`,
+        })
+      }
       imp.visible = false
       await reload()
     }
@@ -450,6 +466,23 @@ function durationText(seconds: number | null) {
         style="font-family: ui-monospace, Menlo, monospace"
       />
 
+      <el-alert
+        v-if="hiddenCount > 0"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-top: 12px"
+      >
+        <template #title>有 {{ hiddenCount }} 档价格粉丝端暂时看不见</template>
+        价格会照常存下来，但所属的服务项目或档位是停用状态，粉丝端一个都不显示，
+        也下不了单。去「服务与价格」把它启用之后才会出现。
+        <ul style="margin: 6px 0 0; padding-left: 18px">
+          <li v-for="r in hiddenRows" :key="r.line">
+            第 {{ r.line }} 行 {{ r.nickname }}：{{ r.hiddenSpecs.join('、') }}
+          </li>
+        </ul>
+      </el-alert>
+
       <el-table
         v-if="imp.result && imp.result.rows.length"
         :data="imp.result.rows"
@@ -461,7 +494,9 @@ function durationText(seconds: number | null) {
         <el-table-column label="昵称" min-width="140" prop="nickname" />
         <el-table-column label="结果" min-width="200">
           <template #default="{ row }">
-            <span :class="row.ok ? 'ok' : 'bad'">{{ row.message }}</span>
+            <span :class="row.ok ? (row.hiddenSpecs?.length ? 'warn' : 'ok') : 'bad'">
+              {{ row.message }}
+            </span>
           </template>
         </el-table-column>
       </el-table>
@@ -627,6 +662,9 @@ function durationText(seconds: number | null) {
 }
 .bad {
   color: #f56c6c;
+}
+.warn {
+  color: #e6a23c;
 }
 .hint {
   margin-left: 8px;
