@@ -7,6 +7,7 @@ import { orderApi } from '@/api/order'
 import { couponApi, type CouponItem } from '@/api/coupon'
 import { ApiError } from '@/api/http'
 import { centsToYuan, formatPrice } from '@/utils/money'
+import { durationHint } from '@/utils/serviceSpec'
 import { ENTRY_QUERY, entryFromRoute } from '@/api/analytics'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -161,8 +162,8 @@ async function submit() {
             >
               <Radio :name="spec.serviceSpecId">
                 <span class="spec-name">{{ spec.name }}</span>
-                <span v-if="spec.durationMinutes" class="spec-duration">
-                  {{ spec.durationMinutes }} 分钟
+                <span v-if="durationHint(spec)" class="spec-duration">
+                  {{ durationHint(spec) }}
                 </span>
               </Radio>
               <span class="spec-price">{{ formatPrice(spec.unitPriceCents) }}</span>

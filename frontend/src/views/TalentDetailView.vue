@@ -7,6 +7,7 @@ import { talentApi, type TalentDetail } from '@/api/talent'
 import { chatApi } from '@/api/chat'
 import { ApiError } from '@/api/http'
 import { formatPrice } from '@/utils/money'
+import { durationHint } from '@/utils/serviceSpec'
 import { ClientEvent, ENTRY_QUERY, entryFromRoute, track } from '@/api/analytics'
 import { savePendingIntent, takePendingIntent } from '@/utils/pendingIntent'
 import EmptyState from '@/components/EmptyState.vue'
@@ -203,7 +204,7 @@ function order(specId?: number) {
             <span class="radio" :class="{ on: selectedSpecId === spec.serviceSpecId }"></span>
             <div class="spec-main">
               <div class="spec-name">{{ group.name }} · {{ spec.name }}</div>
-              <div v-if="spec.durationMinutes" class="spec-sub">{{ spec.durationMinutes }} 分钟</div>
+              <div v-if="durationHint(spec)" class="spec-sub">{{ durationHint(spec) }}</div>
             </div>
             <span class="price num">{{ formatPrice(spec.unitPriceCents) }}</span>
           </div>
