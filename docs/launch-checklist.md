@@ -183,8 +183,38 @@ mysql -u root private_checkout < scripts/cleanup-test-data.sql
 | 12317 | `olcEa3...` | 理查德，真实微信授权登录过的账号 |
 | 84 / 1302 / 3079 / 8220–8224 | `stub_*` | 本机联调用的假登录账号 |
 
-`stub_*` 这八个在上线前也该删——它们是本机调试桩，线上不需要。脚本没动它们，
-是因为你本机还在用。
+#### 关于 `stub_*`：我之前的说法要更正
+
+我写过「这八个在上线前也该删」。**这句话是错的**，得更正两点：
+
+**一、它们根本到不了线上。** 按 `docs/deploy.md`，生产是 `CREATE DATABASE` 建一个
+空库再让 Flyway 迁移，不是把本机这个库导过去。这些行只存在于你这台机器上。
+真正的防线也不是删行，而是：prod profile 下没配 `WECHAT_APP_ID` 会**直接启动失败**，
+不会退化成授权桩（见 `StubWechatOAuthClient` 的注释）。那一条已经在了。
+
+**二、删 `stub_local_dev` 会把你自己关在后台外面。** 角色是位标记：
+
+| 账号 | roles | 含义 |
+| --- | --- | --- |
+| `stub_local_dev` | 5 | FAN + **OPERATOR** |
+| `stub_talent_user` | 3 | FAN + TALENT，绑着主播「小雨」 |
+| 理查德（真实微信号） | 1 | 只有 FAN |
+
+`AppUserService.registerOrUpdate` 给新用户的是 `Roles.DEFAULT`，也就是只有 FAN；
+而所有后台接口都挂着 `@RequireRole(OPERATOR)`，**代码里没有任何授予 OPERATOR 的接口**。
+所以删掉 84 之后重新登录会建出一个新号，但它只有 FAN，进不去后台，
+而理查德也只有 FAN——整个库里就没有运营账号了，只能手写 SQL 才能救回来。
+
+另外本机的授权桩 `buildAuthorizeUrl` 把 code 写死成 `stub_local_dev`，
+所以正常流程登录**只会**登成 84 这一个号。
+
+**2026-11-22 删掉了其中六个**：`stub_pure_fan` 和 `stub_fnl0`–`stub_fnl4`，
+它们 roles 都是 1、不绑任何数据，走正常流程也登不到，删了零成本。
+留下 84 和 1302 两个：前者是你进后台的唯一钥匙，后者绑着主播「小雨」
+（`talent.user_id`），删了小雨的主播工作台就断了。
+
+这两个要删的话，得先决定谁来当运营——比如把 OPERATOR 授给理查德那个真实微信号
+（目前没有界面，得 `UPDATE app_user SET roles = roles | 4 WHERE id = 12317`）。
 
 ### 2026-11-22 跑过一次
 
