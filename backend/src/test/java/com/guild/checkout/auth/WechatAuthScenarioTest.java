@@ -106,6 +106,31 @@ class WechatAuthScenarioTest {
         assertThat(session.getAttribute(WechatAuthController.SESSION_USER_ID)).isNotNull();
     }
 
+    /**
+     * 手机连同一个 Wi-Fi、从局域网地址打开时，授权必须回到同一个地址。
+     *
+     * 配置里的 APP_BASE_URL 默认是 127.0.0.1:5173，而手机上的 127.0.0.1 是手机自己，
+     * 跳过去就是一页「无法打开网页」。开发期用桩时按请求自己的 Host 回跳，
+     * localhost / 127.0.0.1 / 局域网 IP 三种进法才都能走通。
+     */
+    @Test
+    @DisplayName("用桩时按请求的 Host 回跳，手机从局域网地址进来才不会被甩到 127.0.0.1")
+    void 桩按请求Host回跳() throws Exception {
+        MvcResult authorize = mockMvc.perform(get("/api/auth/wechat/authorize")
+                        .param("redirect", "/")
+                        .header("User-Agent", WECHAT_UA)
+                        .header("Host", "192.168.1.6:5173")
+                        .session(new MockHttpSession()))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        String redirect = authorize.getResponse().getRedirectedUrl();
+        assertThat(redirect)
+                .as("回调地址要落在请求进来的那个 Host 上")
+                .startsWith("http://192.168.1.6:5173/api/auth/wechat/callback")
+                .doesNotContain("127.0.0.1");
+    }
+
     @Test
     @DisplayName("Scenario: 已登录用户再次进入 — 不再发起授权跳转")
     void 已登录用户再次进入() throws Exception {

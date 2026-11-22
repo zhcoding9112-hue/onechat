@@ -4,6 +4,7 @@ import com.guild.checkout.analytics.AnalyticsService;
 import com.guild.checkout.analytics.EventKey;
 import com.guild.checkout.auth.wechat.WechatOAuthClient;
 import com.guild.checkout.auth.wechat.WechatOAuthException;
+import com.guild.checkout.auth.wechat.StubWechatOAuthClient;
 import com.guild.checkout.auth.wechat.WechatOAuthProperties;
 import com.guild.checkout.auth.wechat.WechatUserInfo;
 import com.guild.checkout.user.AppUser;
@@ -95,8 +96,35 @@ public class WechatAuthController {
         session.setAttribute(SESSION_STATE_AT, System.currentTimeMillis());
         session.setAttribute(SESSION_REDIRECT, target);
 
-        String callbackUri = properties.callbackBaseUrl() + CALLBACK_PATH;
+        String callbackUri = callbackBaseUrl(request) + CALLBACK_PATH;
         return redirectTo(oauthClient.buildAuthorizeUrl(callbackUri, state));
+    }
+
+    /**
+     * 回调要回到哪个基地址。
+     *
+     * 正常一律取配置里的 APP_BASE_URL：微信后台登记的网页授权域名必须和它一致，
+     * 这种事不能让请求头说了算——Host 是客户端可以随便写的。
+     *
+     * 只有在用本机授权桩时改用请求自己的地址。原因是开发期同一个服务会被三种地址访问：
+     * localhost:5173、127.0.0.1:5173、局域网 IP:5173（手机连同一个 Wi-Fi 时用这个）。
+     * 固定一个基地址就意味着另外两种全都走不通——手机从局域网地址进来，
+     * 授权时会被跳去 127.0.0.1，而那是手机自己，页面直接打不开。
+     * 浏览器里也一样：从 localhost 进去，回跳落到 127.0.0.1，
+     * 两个主机的 Cookie 不互通，state 校验必然失败。
+     *
+     * 桩只有在「没配 AppID」且 profile 属于 local/test/dev 时才会被装配，
+     * 生产缺配会在启动时直接失败（见 WechatOAuthConfig），所以这条分支进不到生产。
+     */
+    private String callbackBaseUrl(HttpServletRequest request) {
+        if (!(oauthClient instanceof StubWechatOAuthClient)) {
+            return properties.callbackBaseUrl();
+        }
+        String host = request.getHeader("Host");
+        if (host == null || host.isBlank()) {
+            return properties.callbackBaseUrl();
+        }
+        return request.getScheme() + "://" + host;
     }
 
     /** 微信回调。code 为空视为用户拒绝授权。 */
