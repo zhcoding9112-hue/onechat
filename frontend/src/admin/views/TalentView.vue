@@ -436,7 +436,9 @@ function durationText(seconds: number | null) {
         第一行必须是表头：<code>{{ IMPORT_HEADER }}</code><br />
         标签与宣传语用竖线分隔（如 <code>温柔|耐心</code>）；
         服务档位填「项目编码:档位编码」（如 <code>listen:m30</code>），
-        与价格要么都填、要么都留空。
+        与价格要么都填、要么都留空。<br />
+        一位主播有几档价就在这两列各填几项，同样用竖线分隔、<strong>按位置一一对应</strong>：
+        <code>listen:m15|listen:m30</code> 配 <code>9|15</code>。两列个数不一样会报错。
         <el-button link type="primary" @click="downloadTemplate">下载模板</el-button>
       </p>
 

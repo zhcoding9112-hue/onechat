@@ -183,12 +183,18 @@ public class TalentAdminController {
         }
     }
 
-    /** CSV 模板。带表头与一行示例，直接另存为就能填。 */
+    /**
+     * CSV 模板。带表头与一行示例，直接另存为就能填。
+     *
+     * 示例行刻意写成多档多价：「服务档位」「价格元」两列都按竖线分隔、按位置对应。
+     * 运营看模板比看文档多，示例只给一档的话，多数人不会知道能填多档。
+     */
     @GetMapping("/import/template")
     public ResponseEntity<Resource> template() {
         String csv = "\uFEFF"
                 + String.join(",", TalentImportService.HEADERS) + "\n"
-                + "小雨,女,23,杭州,\"温柔，耐心，喜欢听人说话\",温柔|耐心|夜猫子,深夜电台|声音很治愈,10,listen:m30,25\n";
+                + "小雨,女,23,杭州,\"温柔，耐心，喜欢听人说话\",温柔|耐心|夜猫子,深夜电台|声音很治愈,10,"
+                + "listen:m15|listen:m30|listen:m60,9|15|25\n";
         byte[] body = csv.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,

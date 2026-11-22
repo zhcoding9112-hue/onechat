@@ -147,24 +147,81 @@ public class TalentImportService {
             talentAdminService.replaceTags(talent.getId(), tags);
         }
 
-        String specCode = cell(row, 8);
-        String price = cell(row, 9);
-        String note = "已建档";
-        if (!specCode.isEmpty() || !price.isEmpty()) {
-            if (specCode.isEmpty() || price.isEmpty()) {
-                throw new BusinessException("「服务档位」与「价格元」要么都填，要么都留空");
-            }
-            ServiceSpec spec = specs.get(specCode.toLowerCase(Locale.ROOT));
-            if (spec == null) {
-                throw new BusinessException("找不到服务档位「%s」，现有：%s"
-                        .formatted(specCode, String.join("、", specs.keySet())));
-            }
-            priceService.setPrice(talent.getId(), spec.getId(), yuanToCents(price), true);
-            note = "已建档并设价";
-        }
+        int priced = applyPrices(talent.getId(), cell(row, 8), cell(row, 9), specs);
+        String note = switch (priced) {
+            case 0 -> "已建档";
+            case 1 -> "已建档并设价";
+            default -> "已建档并设价 %d 档".formatted(priced);
+        };
 
         // 不自动上架：封面与试听还没传，上架就会在粉丝端留白
         return new RowResult(line, true, talent.getId(), nickname, note);
+    }
+
+    /**
+     * 一行里的多档多价。
+     *
+     * 「服务档位」与「价格元」两列都用竖线分隔、按位置一一对应，和标签那列一个写法：
+     *
+     *     listen:m15|listen:m30|listen:m60
+     *     9|15|25
+     *
+     * 为什么不允许「一个价配多个档位」：30 分钟和 120 分钟卖同一个价，
+     * 几乎只会是填错，而不是真的想这么定价。个数不等就报错，别替运营猜。
+     *
+     * @return 这一行实际设了几档价
+     */
+    private int applyPrices(long talentId, String specCell, String priceCell,
+                            Map<String, ServiceSpec> specs) {
+        if (specCell.isEmpty() && priceCell.isEmpty()) {
+            return 0;
+        }
+        if (specCell.isEmpty() || priceCell.isEmpty()) {
+            throw new BusinessException("「服务档位」与「价格元」要么都填，要么都留空");
+        }
+
+        List<String> specCodes = pairCells(specCell, "服务档位");
+        List<String> prices = pairCells(priceCell, "价格元");
+        if (specCodes.size() != prices.size()) {
+            throw new BusinessException(
+                    "「服务档位」填了 %d 个、「价格元」填了 %d 个，两列个数要一样（用竖线分隔，按位置一一对应）"
+                            .formatted(specCodes.size(), prices.size()));
+        }
+
+        // 同一档位在一行里出现两次：后一个会把前一个覆盖掉，静默生效最难查，直接报错
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < specCodes.size(); i++) {
+            String code = specCodes.get(i).toLowerCase(Locale.ROOT);
+            if (!seen.add(code)) {
+                throw new BusinessException("服务档位「%s」在同一行里填了两次".formatted(specCodes.get(i)));
+            }
+            ServiceSpec spec = specs.get(code);
+            if (spec == null) {
+                throw new BusinessException("找不到服务档位「%s」，现有：%s"
+                        .formatted(specCodes.get(i), String.join("、", specs.keySet())));
+            }
+            priceService.setPrice(talentId, spec.getId(), yuanToCents(prices.get(i)), true);
+        }
+        return specCodes.size();
+    }
+
+    /**
+     * 按竖线切成一一对应的若干项。
+     *
+     * 和 split() 不同：这里**不丢弃空项**。「9||15」丢掉空项就变成两项、
+     * 正好和两个档位对上，价格会错位落到别的档位上——宁可报错。
+     */
+    private static List<String> pairCells(String value, String column) {
+        List<String> out = new ArrayList<>();
+        for (String part : value.split("\\|", -1)) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                throw new BusinessException("「%s」里有空项，检查是不是多打了一个竖线：%s"
+                        .formatted(column, value));
+            }
+            out.add(trimmed);
+        }
+        return out;
     }
 
     /** 档位按「项目编码:档位编码」索引，例如 listen:m30。 */

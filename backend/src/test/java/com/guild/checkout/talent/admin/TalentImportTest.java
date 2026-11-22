@@ -39,6 +39,9 @@ class TalentImportTest {
     @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private String specCode;
+    /** 同一个项目下的另外两档，用来验一行多档多价。 */
+    private String specCode15;
+    private String specCode60;
     private long itemId;
     /** 本次用例的昵称后缀。开发库里本来就有「阿澈」，不加后缀会找错人。 */
     private String suffix;
@@ -49,8 +52,12 @@ class TalentImportTest {
         String itemCode = "imp" + suffix;
         ServiceItem item = catalogService.createItem(itemCode, "导入测试项目", null, 0);
         itemId = item.getId();
-        ServiceSpec spec = catalogService.createSpec(item.getId(), "m30", "30分钟", 30, 0);
+        ServiceSpec spec = catalogService.createSpec(item.getId(), "m30", "30分钟", 30, 20);
         specCode = itemCode + ":" + spec.getCode();
+        specCode15 = itemCode + ":" + catalogService.createSpec(
+                item.getId(), "m15", "15分钟", 15, 10).getCode();
+        specCode60 = itemCode + ":" + catalogService.createSpec(
+                item.getId(), "m60", "60分钟", 60, 30).getCode();
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -163,6 +170,65 @@ class TalentImportTest {
                 HEADER + name("阿雨") + ",女,23,杭州,简介,标签,,0," + specCode + ",\n", false))
                 .isInstanceOf(TalentImportService.ImportFailed.class)
                 .hasMessageContaining("要么都填");
+    }
+
+    // ---------- 一行多档多价 ----------
+
+    /**
+     * 一位主播通常有好几档价。
+     *
+     * 两列各只能填一格的时候，三十个人四档就是九十次手工补价；
+     * 所以两列都按竖线分隔、按位置对应。
+     */
+    @Test
+    @DisplayName("一行填三个档位三个价，三档都落下来")
+    void 一行多档多价() {
+        var result = importService.importCsv(HEADER
+                + name("阿雨") + ",女,23,杭州,温柔,温柔,,10,"
+                + specCode15 + "|" + specCode + "|" + specCode60 + ",9|15|25\n", false);
+
+        assertThat(result.created()).isEqualTo(1);
+        assertThat(result.rows().get(0).message()).contains("3 档");
+
+        long talentId = findByNickname(name("阿雨")).getId();
+        assertThat(priceService.listByTalent(talentId))
+                .extracting(p -> p.getUnitPriceCents())
+                .containsExactlyInAnyOrder(900L, 1500L, 2500L);
+    }
+
+    @Test
+    @DisplayName("两列个数不等就报错，不替运营猜哪个价配哪一档")
+    void 档位与价格个数要相等() {
+        assertThatThrownBy(() -> importService.importCsv(HEADER
+                + name("阿雨") + ",女,23,杭州,简介,标签,,0,"
+                + specCode15 + "|" + specCode + ",15\n", false))
+                .isInstanceOf(TalentImportService.ImportFailed.class)
+                .hasMessageContaining("个数要一样");
+    }
+
+    /** 后一个会把前一个覆盖掉，静默生效最难查。 */
+    @Test
+    @DisplayName("同一个档位在一行里填两次要报错")
+    void 同行重复档位() {
+        assertThatThrownBy(() -> importService.importCsv(HEADER
+                + name("阿雨") + ",女,23,杭州,简介,标签,,0,"
+                + specCode + "|" + specCode + ",15|25\n", false))
+                .isInstanceOf(TalentImportService.ImportFailed.class)
+                .hasMessageContaining("填了两次");
+    }
+
+    /**
+     * 「9||15」若按丢弃空项来切，正好剩两项、和两个档位对上，
+     * 价格会静默错位落到别的档位上。所以空项必须报错。
+     */
+    @Test
+    @DisplayName("多打一个竖线不能被悄悄吞掉，否则价格会错位")
+    void 空项要报错() {
+        assertThatThrownBy(() -> importService.importCsv(HEADER
+                + name("阿雨") + ",女,23,杭州,简介,标签,,0,"
+                + specCode15 + "|" + specCode + ",9||15\n", false))
+                .isInstanceOf(TalentImportService.ImportFailed.class)
+                .hasMessageContaining("有空项");
     }
 
     @Test
