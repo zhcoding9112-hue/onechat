@@ -52,12 +52,18 @@ const DEV_WECHAT_UA =
   '(KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128) NetType/WIFI Language/zh_CN'
 
 const fakeWechatUserAgent: NonNullable<ProxyOptions['configure']> = (proxy) => {
-  proxy.on('proxyReq', (proxyReq) => {
+  proxy.on('proxyReq', (proxyReq, req) => {
     const current = String(proxyReq.getHeader('user-agent') ?? '').toLowerCase()
-    if (current.includes('micromessenger') || current.includes('wechatdevtools')) {
-      return
+    if (!current.includes('micromessenger') && !current.includes('wechatdevtools')) {
+      proxyReq.setHeader('user-agent', DEV_WECHAT_UA)
     }
-    proxyReq.setHeader('user-agent', DEV_WECHAT_UA)
+
+    // 隧道（cloudflared 等）在外面是 https，到这里是 http。原样把协议头带给后端，
+    // 否则后端拼出来的授权回跳是 http://，在 https 页面里就是一次降级跳转。
+    const proto = req.headers['x-forwarded-proto']
+    if (typeof proto === 'string' && proto) {
+      proxyReq.setHeader('x-forwarded-proto', proto)
+    }
   })
 }
 
@@ -87,6 +93,17 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    /**
+     * 允许用隧道域名访问开发服务器。
+     *
+     * Vite 6 会按 Host 头拦陌生域名（防 DNS 重绑定），cloudflared 的随机域名
+     * 一律被 403 挡掉。临时给人看时隧道每次重启都换一个随机前缀，
+     * 所以这里放的是整个 trycloudflare.com，而不是某一个具体域名。
+     *
+     * 只在 vite dev 生效。另外：把开发服务器挂到公网之前先想清楚谁能进来——
+     * 本机跑的是授权桩，谁打开谁就直接登录。
+     */
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       // 开发期把 /api 转给后端，避免跨域并让会话 Cookie 同源下发。
       '/api': {

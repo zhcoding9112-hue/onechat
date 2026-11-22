@@ -124,7 +124,26 @@ public class WechatAuthController {
         if (host == null || host.isBlank()) {
             return properties.callbackBaseUrl();
         }
-        return request.getScheme() + "://" + host;
+        return scheme(request) + "://" + host;
+    }
+
+    /**
+     * 请求在**外面**是什么协议。
+     *
+     * 本机直连时就是 request.getScheme()。但临时用隧道（cloudflared 之类）给人看时，
+     * 外面是 https、进到这里是 http，按 getScheme() 拼出来的回跳就是 http://，
+     * 在一个 https 页面里跳过去是一次降级，浏览器可能直接拦掉。
+     *
+     * 这里只在走授权桩的分支里被调用（见 callbackBaseUrl），所以认 X-Forwarded-Proto
+     * 不构成生产上的信任问题——生产取的是配置里的 APP_BASE_URL，根本不看请求头。
+     */
+    private static String scheme(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-Proto");
+        if (forwarded != null && !forwarded.isBlank()) {
+            // 可能是 "https, http" 这种多级代理叠出来的，取第一段
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getScheme();
     }
 
     /** 微信回调。code 为空视为用户拒绝授权。 */

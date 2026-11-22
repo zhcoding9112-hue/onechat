@@ -131,6 +131,25 @@ class WechatAuthScenarioTest {
                 .doesNotContain("127.0.0.1");
     }
 
+    /**
+     * 隧道外面是 https、进到后端是 http，按请求自己的协议拼回跳就成了降级跳转。
+     */
+    @Test
+    @DisplayName("隧道转发时认 X-Forwarded-Proto，回跳用 https 而不是 http")
+    void 桩认转发协议头() throws Exception {
+        MvcResult authorize = mockMvc.perform(get("/api/auth/wechat/authorize")
+                        .param("redirect", "/")
+                        .header("User-Agent", WECHAT_UA)
+                        .header("Host", "demo.trycloudflare.com")
+                        .header("X-Forwarded-Proto", "https")
+                        .session(new MockHttpSession()))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        assertThat(authorize.getResponse().getRedirectedUrl())
+                .startsWith("https://demo.trycloudflare.com/api/auth/wechat/callback");
+    }
+
     @Test
     @DisplayName("Scenario: 已登录用户再次进入 — 不再发起授权跳转")
     void 已登录用户再次进入() throws Exception {
