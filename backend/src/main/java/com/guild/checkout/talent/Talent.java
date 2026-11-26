@@ -20,6 +20,8 @@ public class Talent {
     private String gender;
     /** 年龄。可空。 */
     private Integer age;
+    /** 主播等级，复用现有 talent.level 字段。 */
+    private Integer level;
     /** 地区。可空。 */
     private String region;
     private String coverUrl;
@@ -52,6 +54,8 @@ public class Talent {
     public void setNickname(String nickname) { this.nickname = nickname; }
     public String getGender() { return gender; }
     public void setGender(String gender) { this.gender = gender; }
+    public Integer getLevel() { return level; }
+    public void setLevel(Integer level) { this.level = level; }
     public Integer getAge() { return age; }
     public void setAge(Integer age) { this.age = age; }
     public String getRegion() { return region; }

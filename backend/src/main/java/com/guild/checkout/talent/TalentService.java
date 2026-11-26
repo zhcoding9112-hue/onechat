@@ -18,6 +18,16 @@ public class TalentService {
     private final TalentTagMapper tagMapper;
 
     private TalentQueryMapper queryMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TalentMediaMapper mediaMapper;
+
+    public List<String> photos(long talentId) {
+        if (mediaMapper == null) return List.of();
+        return mediaMapper.selectList(Wrappers.<TalentMedia>lambdaQuery()
+                .eq(TalentMedia::getTalentId, talentId).eq(TalentMedia::getMediaType, TalentMedia.TYPE_PHOTO)
+                .orderByAsc(TalentMedia::getSortOrder).orderByAsc(TalentMedia::getId))
+                .stream().map(TalentMedia::getUrl).toList();
+    }
 
     /** 由 Spring 注入；用 setter 而非构造参数，避免改动既有构造函数的全部调用点。 */
     @org.springframework.beans.factory.annotation.Autowired
@@ -36,11 +46,15 @@ public class TalentService {
      * 会让结果行重复，去重后再取实体比在 SQL 里 DISTINCT 全字段更简单可靠。
      */
     public TalentPage listListed(String categoryCode, String gender, Integer level, int page, int size) {
+        return listListed(categoryCode, gender, level, null, page, size);
+    }
+
+    public TalentPage listListed(String categoryCode, String gender, Integer level, String keyword, int page, int size) {
         int safeSize = Math.min(Math.max(size, 1), 50);
         int safePage = Math.max(page, 0);
         List<Long> ids = queryMapper.findIds(
-                trimToNull(categoryCode), trimToNull(gender), level, safeSize, safePage * safeSize);
-        long total = queryMapper.countMatching(trimToNull(categoryCode), trimToNull(gender), level);
+                trimToNull(categoryCode), trimToNull(gender), level, trimToNull(keyword), safeSize, safePage * safeSize);
+        long total = queryMapper.countMatching(trimToNull(categoryCode), trimToNull(gender), level, trimToNull(keyword));
         if (ids.isEmpty()) {
             return new TalentPage(List.of(), total);
         }

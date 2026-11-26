@@ -45,7 +45,7 @@ public class TalentAdminController {
             Long id, Long userId, String nickname, String coverUrl, String intro,
             String audioUrl, Integer audioSeconds, boolean online, boolean listed,
             int sortOrder, List<String> tags,
-            String gender, Integer age, String region, List<String> promoTags) {
+            String gender, Integer age, String region, List<String> promoTags, Integer level) {
     }
 
     public record CreateRequest(
@@ -56,7 +56,7 @@ public class TalentAdminController {
             @Size(max = 8) String gender,
             Integer age,
             @Size(max = 32, message = "地区不超过 32 字符") String region,
-            List<String> promoTags) {
+            List<String> promoTags, Integer level) {
     }
 
     public record UpdateRequest(
@@ -69,7 +69,7 @@ public class TalentAdminController {
             @Size(max = 32, message = "地区不超过 32 字符") String region,
             // 数量上限不用 @Size：超限要的是「最多 2 个」这句业务提示，
             // 统一在 TalentAdminService 里校验，和长度校验留在同一处。
-            List<String> promoTags) {
+            List<String> promoTags, Integer level) {
     }
 
     public record TagsRequest(List<@Size(max = 32, message = "单个标签不超过 32 字符") String> tags) {
@@ -100,7 +100,7 @@ public class TalentAdminController {
     public ApiResponse<TalentView> create(@Valid @RequestBody CreateRequest req) {
         Talent talent = adminService.create(new TalentAdminService.ProfileForm(
                 req.nickname(), req.intro(), req.coverUrl(), req.sortOrder(),
-                req.gender(), req.age(), req.region(), req.promoTags()));
+                req.gender(), req.age(), req.region(), req.promoTags(), req.level()));
         return ApiResponse.ok(toView(talent, List.of()));
     }
 
@@ -109,7 +109,7 @@ public class TalentAdminController {
                                           @Valid @RequestBody UpdateRequest req) {
         Talent talent = adminService.update(talentId, new TalentAdminService.ProfileForm(
                 req.nickname(), req.intro(), req.coverUrl(), req.sortOrder(),
-                req.gender(), req.age(), req.region(), req.promoTags()));
+                req.gender(), req.age(), req.region(), req.promoTags(), req.level()));
         return ApiResponse.ok(toView(talent, talentService.listTags(talentId)));
     }
 
@@ -155,7 +155,7 @@ public class TalentAdminController {
                 tags == null ? List.of() : tags.stream().map(TalentTag::getName).toList(),
                 t.getGender(), t.getAge(), t.getRegion(),
                 java.util.stream.Stream.of(t.getPromoTag1(), t.getPromoTag2())
-                        .filter(java.util.Objects::nonNull).toList());
+                        .filter(java.util.Objects::nonNull).toList(), t.getLevel());
     }
 
     // ---------- 批量导入 ----------

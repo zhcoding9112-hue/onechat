@@ -16,8 +16,8 @@ import java.util.Map;
 /**
  * 粉丝端的主播目录。
  *
- * 列表只含已上架主播，固定顺序，不提供搜索与筛选——粉丝是指名来找特定主播的，
- * 不存在匹配问题。详情页对已下架主播只展示提示，不给下单入口。
+ * 列表只含已上架主播，支持昵称、品类、性别与等级筛选。
+ * 详情页对已下架主播只展示提示，不给下单入口。
  */
 @RestController
 @RequestMapping("/api/talents")
@@ -51,7 +51,7 @@ public class TalentCatalogController {
             Integer age,
             String region,
             /** 宣传语标签，运营自填，0 到 2 条。 */
-            List<String> promoTags) {
+            List<String> promoTags, Integer level) {
     }
 
     /**
@@ -90,7 +90,7 @@ public class TalentCatalogController {
             String region,
             List<String> promoTags,
             /** 当前粉丝是否已收藏该主播。 */
-            boolean favorited) {
+            boolean favorited, Integer level, List<String> photos) {
     }
 
     // ---------- 列表 ----------
@@ -100,10 +100,11 @@ public class TalentCatalogController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String gender,
             @RequestParam(required = false) Integer level,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        TalentService.TalentPage result = talentService.listListed(category, gender, level, page, size);
+        TalentService.TalentPage result = talentService.listListed(category, gender, level, keyword, page, size);
         List<Talent> talents = result.items();
         Map<Long, List<TalentTag>> tagMap = talentService.listTagsByTalents(
                 talents.stream().map(Talent::getId).toList());
@@ -120,7 +121,7 @@ public class TalentCatalogController {
                         t.getGender(),
                         t.getAge(),
                         t.getRegion(),
-                        promoTags(t)))
+                        promoTags(t), t.getLevel()))
                 .toList();
 
         int consumed = Math.max(page, 0) * Math.min(Math.max(size, 1), 50) + cards.size();
@@ -147,7 +148,7 @@ public class TalentCatalogController {
                         tagNames(tagMap.get(t.getId())),
                         Boolean.TRUE.equals(t.getOnline()),
                         t.getAudioUrl(), t.getAudioSeconds(),
-                        t.getGender(), t.getAge(), t.getRegion(), promoTags(t)))
+                        t.getGender(), t.getAge(), t.getRegion(), promoTags(t), t.getLevel()))
                 .toList());
     }
 
@@ -167,7 +168,7 @@ public class TalentCatalogController {
                     talent.getAudioUrl(), talent.getAudioSeconds(),
                     false, "该主播暂不可约", List.of(),
                     talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent),
-                    favorited(talentId)));
+                    favorited(talentId), talent.getLevel(), talentService.photos(talentId)));
         }
 
         List<ItemGroup> services = groupServices(talentId);
@@ -181,7 +182,7 @@ public class TalentCatalogController {
                 talent.getAudioUrl(), talent.getAudioSeconds(),
                 !services.isEmpty(), reason, services,
                 talent.getGender(), talent.getAge(), talent.getRegion(), promoTags(talent),
-                favorited(talentId)));
+                favorited(talentId), talent.getLevel(), talentService.photos(talentId)));
     }
 
     private boolean favorited(long talentId) {

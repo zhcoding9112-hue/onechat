@@ -97,6 +97,14 @@ storage:
   root-dir: ${STORAGE_ROOT:./uploads}
   public-prefix: ${STORAGE_PUBLIC_PREFIX:/uploads}
 
+support:
+  title: ${SUPPORT_TITLE:在线客服}
+  description: ${SUPPORT_DESCRIPTION:订单咨询 · 服务协助}
+  hours: ${SUPPORT_HOURS:}
+  wechat-id: ${SUPPORT_WECHAT_ID:}
+  qr-code-url: ${SUPPORT_QR_CODE_URL:}
+  service-url: ${SUPPORT_SERVICE_URL:}
+
 wechat:
   oauth:
     app-id: ${WECHAT_APP_ID:}

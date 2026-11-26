@@ -40,6 +40,7 @@ public class RandomMatchController {
     public ApiResponse<MatchResult> random(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String gender,
+            @RequestParam(required = false) Integer level,
             @RequestParam(defaultValue = "false") boolean onlineOnly,
             @RequestParam(defaultValue = "false") boolean excludeOrdered,
             @RequestParam(required = false) List<Long> exclude) {
@@ -47,7 +48,7 @@ public class RandomMatchController {
         long fanUserId = CurrentUserHolder.requireUserId();
         return ApiResponse.ok(matchService
                 .match(fanUserId, new RandomMatchService.Criteria(
-                        category, gender, onlineOnly, excludeOrdered, exclude))
+                        category, gender, onlineOnly, excludeOrdered, exclude, level))
                 .map(t -> new MatchResult(true, toView(t), null))
                 .orElseGet(() -> new MatchResult(false, null, "暂时没有符合条件的主播，试试放宽条件")));
     }

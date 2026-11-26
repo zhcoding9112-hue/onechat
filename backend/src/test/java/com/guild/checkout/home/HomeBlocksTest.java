@@ -3,11 +3,17 @@ package com.guild.checkout.home;
 import com.guild.checkout.talent.Talent;
 import com.guild.checkout.talent.TalentService;
 import com.guild.checkout.talent.admin.TalentAdminService;
+import com.guild.checkout.auth.WechatAuthController;
+import com.guild.checkout.user.AppUserService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -15,6 +21,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * 首页区块（tasks 2.4 - 2.8）。
@@ -32,6 +41,59 @@ class HomeBlocksTest {
     @Autowired private TalentAdminService talentAdminService;
     @Autowired private TalentService talentService;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private WebApplicationContext context;
+    @Autowired private AppUserService userService;
+    @Autowired private ObjectMapper objectMapper;
+
+    @Test
+    void 未配置客服时不产生虚假联系方式() {
+        var config = new SupportProperties(null, null, null, null, null, null);
+        assertThat(config.title()).isEqualTo("在线客服");
+        assertThat(config.configured()).isFalse();
+        assertThat(config.wechatId()).isEmpty();
+        assertThat(config.qrCodeUrl()).isEmpty();
+        assertThat(config.serviceUrl()).isEmpty();
+    }
+
+    @Test
+    void 客服配置支持微信号站内图片和HTTPS链接() {
+        var config = new SupportProperties(" 专属客服 ", null, " 09:00–18:00 ",
+                " example_support ", "/uploads/support/qr.png", "https://work.weixin.qq.com/kfid/example");
+        assertThat(config.title()).isEqualTo("专属客服");
+        assertThat(config.wechatId()).isEqualTo("example_support");
+        assertThat(config.qrCodeUrl()).isEqualTo("/uploads/support/qr.png");
+        assertThat(config.hours()).isEqualTo("09:00–18:00");
+        assertThat(config.configured()).isTrue();
+        assertThat(new SupportProperties(null, null, null, null, "https://example.com/qr.png", null)
+                .configured()).isTrue();
+    }
+
+    @Test
+    void 客服配置拒绝脚本协议和不安全地址() {
+        for (String url : List.of("javascript:alert(1)", "data:text/html,example", "http://example.com",
+                "//example.com/qr.png", "/\\example.com", "https://name:secret@example.com")) {
+            assertThatThrownBy(() -> new SupportProperties(null, null, null, null, url, null))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new SupportProperties(null, null, null, null, null, url))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void 客服接口要求登录且仅返回展示字段() throws Exception {
+        var mvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mvc.perform(get("/api/home/support")).andExpect(status().isUnauthorized());
+        var user = userService.registerOrUpdate("support_" + System.nanoTime(), null, "客服验收", null);
+        var session = new MockHttpSession();
+        session.setAttribute(WechatAuthController.SESSION_USER_ID, user.getId());
+        var result = mvc.perform(get("/api/home/support").session(session))
+                .andExpect(status().isOk()).andReturn();
+        var data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
+        var fields = new java.util.ArrayList<String>();
+        data.fieldNames().forEachRemaining(fields::add);
+        assertThat(fields).containsExactlyInAnyOrder("title", "description", "hours", "wechatId",
+                "qrCodeUrl", "serviceUrl", "configured");
+    }
 
     private Talent newListedTalent(String nickname, String gender) {
         Talent t = talentAdminService.create(new TalentAdminService.ProfileForm(

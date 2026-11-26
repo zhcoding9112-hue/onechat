@@ -29,13 +29,16 @@ public class HomeController {
     private final HomeService homeService;
     private final TalentService talentService;
     private final ServiceCatalogAdminService catalogService;
+    private final SupportProperties supportProperties;
 
     public HomeController(HomeService homeService,
                           TalentService talentService,
-                          ServiceCatalogAdminService catalogService) {
+                          ServiceCatalogAdminService catalogService,
+                          SupportProperties supportProperties) {
         this.homeService = homeService;
         this.talentService = talentService;
         this.catalogService = catalogService;
+        this.supportProperties = supportProperties;
     }
 
     public record CategoryView(String code, String name) {
@@ -48,6 +51,18 @@ public class HomeController {
     }
 
     public record EntryView(Long id, String title, String subtitle, String imageUrl, String targetUrl) {
+    }
+
+    public record SupportView(String title, String description, String hours, String wechatId,
+                              String qrCodeUrl, String serviceUrl, boolean configured) {
+    }
+
+    /** 与首页其余接口一样要求已登录；只返回客服展示字段，不暴露其他部署配置。 */
+    @GetMapping("/support")
+    public ApiResponse<SupportView> support() {
+        var p = supportProperties;
+        return ApiResponse.ok(new SupportView(p.title(), p.description(), p.hours(), p.wechatId(),
+                p.qrCodeUrl(), p.serviceUrl(), p.configured()));
     }
 
     /** 品类 Tab。取自服务项目配置，不硬编码。 */

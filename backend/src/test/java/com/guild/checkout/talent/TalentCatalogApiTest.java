@@ -66,6 +66,28 @@ class TalentCatalogApiTest {
         spec30 = catalogService.createSpec(item.getId(), "m30", "30分钟", 30, 30);
     }
 
+    @Test
+    @DisplayName("视觉复刻：昵称搜索按字面匹配，等级字段可维护且参与筛选")
+    void 昵称搜索与等级贯通() throws Exception {
+        String name = "视觉%搜索_" + System.nanoTime();
+        long id = listedTalent(name);
+        mockMvc.perform(put("/api/admin/talents/" + id).session(operator)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"level\":6}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.level").value(6));
+        mockMvc.perform(get("/api/talents").session(fan).param("keyword", name).param("level", "6"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(id))
+                .andExpect(jsonPath("$.data.items[0].level").value(6));
+        mockMvc.perform(get("/api/talents").session(fan).param("keyword", name).param("level", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mockMvc.perform(get("/api/talents/" + id).session(fan))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.level").value(6))
+                .andExpect(jsonPath("$.data.photos").isArray());
+        mockMvc.perform(put("/api/admin/talents/" + id).session(operator)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"level\":7}"))
+                .andExpect(status().isConflict());
+    }
+
     // ---------- 4.2 档案增改与上下架 ----------
 
     @Test
@@ -424,7 +446,7 @@ class TalentCatalogApiTest {
                         .session(operator).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new com.guild.checkout.talent.admin.TalentAdminController
-                                        .CreateRequest(nickname, null, null, 0, null, null, null, null))))
+                                        .CreateRequest(nickname, null, null, 0, null, null, null, null, null))))
                 .andExpect(status().isOk())
                 .andReturn();
         return dataOf(result).get("id").asLong();

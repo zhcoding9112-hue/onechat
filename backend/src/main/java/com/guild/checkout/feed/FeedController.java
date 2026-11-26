@@ -97,12 +97,13 @@ public class FeedController {
 
     @GetMapping("/posts")
     public ApiResponse<PostPage> square(@RequestParam(defaultValue = "0") int page,
-                                        @RequestParam(defaultValue = "10") int size) {
+                                        @RequestParam(defaultValue = "10") int size,
+                                        @RequestParam(defaultValue = "false") boolean followed) {
         Long viewer = viewerId();
         int limit = Math.min(Math.max(size, 1), 50);
-        List<PostView> items = feedService.square(viewer, page, limit).stream()
+        List<PostView> items = feedService.square(viewer, page, limit, followed).stream()
                 .map(FeedController::toView).toList();
-        long total = feedService.countVisible();
+        long total = feedService.countVisible(viewer, followed);
         boolean hasMore = (long) Math.max(page, 0) * limit + items.size() < total;
         return ApiResponse.ok(new PostPage(items, total, hasMore));
     }

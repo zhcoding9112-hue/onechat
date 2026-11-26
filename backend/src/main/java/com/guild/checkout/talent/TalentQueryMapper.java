@@ -20,6 +20,9 @@ public interface TalentQueryMapper {
     String FILTER = """
             FROM talent t
             WHERE t.listed = 1
+            <if test="keyword != null">
+              AND LOCATE(#{keyword}, t.nickname) > 0
+            </if>
             <if test="gender != null">
               AND t.gender = #{gender}
             </if>
@@ -41,13 +44,15 @@ public interface TalentQueryMapper {
     List<Long> findIds(@Param("categoryCode") String categoryCode,
                        @Param("gender") String gender,
                        @Param("level") Integer level,
+                       @Param("keyword") String keyword,
                        @Param("limit") int limit,
                        @Param("offset") int offset);
 
     @Select("<script>SELECT COUNT(*) " + FILTER + "</script>")
     long countMatching(@Param("categoryCode") String categoryCode,
                        @Param("gender") String gender,
-                       @Param("level") Integer level);
+                       @Param("level") Integer level,
+                       @Param("keyword") String keyword);
 
     /**
      * 随机匹配一位主播。
@@ -69,6 +74,9 @@ public interface TalentQueryMapper {
             WHERE t.listed = 1
             <if test="gender != null">
               AND t.gender = #{gender}
+            </if>
+            <if test="level != null">
+              AND t.level = #{level}
             </if>
             <if test="onlineOnly">
               AND t.online = 1
@@ -98,6 +106,7 @@ public interface TalentQueryMapper {
     @Options(flushCache = Options.FlushCachePolicy.TRUE)
     Long findRandomId(@Param("categoryCode") String categoryCode,
                       @Param("gender") String gender,
+                      @Param("level") Integer level,
                       @Param("onlineOnly") boolean onlineOnly,
                       @Param("excludeOrderedFor") Long excludeOrderedFor,
                       @Param("excludeIds") java.util.List<Long> excludeIds);

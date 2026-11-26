@@ -64,6 +64,19 @@ class RandomMatchTest {
     }
 
     @Test
+    @DisplayName("随机盲盒的等级条件在查询中生效")
+    void 按等级匹配() {
+        Talent t = newListed("六级匹配_" + System.nanoTime(), "FEMALE", true);
+        talentAdminService.update(t.getId(), new TalentAdminService.ProfileForm(
+                null, null, null, null, null, null, null, null, 6));
+        var criteria = new RandomMatchService.Criteria(null, "FEMALE", true, false, List.of(), 6);
+        for (int i = 0; i < 5; i++) {
+            assertThat(matchService.match(FAN_ID, criteria)).isPresent()
+                    .get().extracting(Talent::getLevel).isEqualTo(6);
+        }
+    }
+
+    @Test
     @DisplayName("4.1 连续 100 次匹配的结果既不固定也不是轮询")
     void 连续匹配不是固定顺序或轮询() {
         givenEnoughCandidates(6);

@@ -36,6 +36,7 @@ class FeedTest {
     @Autowired private ContentReportMapper reportMapper;
     @Autowired private TalentAdminService talentAdminService;
     @Autowired private AppUserService userService;
+    @Autowired private com.guild.checkout.talent.TalentFavoriteService favoriteService;
 
     private long fanId;
     private long otherFanId;
@@ -63,6 +64,23 @@ class FeedTest {
 
     private FeedPost publish(String content, List<String> images) {
         return feedService.publish(talentId, content, images);
+    }
+
+    @Test
+    @DisplayName("关注动态：翻页总数一致、用户隔离、取消关注与下架立即生效")
+    void 关注动态按用户隔离且计数一致() {
+        FeedPost first = publish("关注第一条", List.of());
+        FeedPost second = publish("关注第二条", List.of());
+        favoriteService.add(fanId, talentId);
+        assertThat(feedService.countVisible(fanId, true)).isEqualTo(2);
+        assertThat(feedService.square(fanId, 0, 1, true)).extracting(p -> p.post().getId()).containsExactly(second.getId());
+        assertThat(feedService.square(fanId, 1, 1, true)).extracting(p -> p.post().getId()).containsExactly(first.getId());
+        assertThat(feedService.square(otherFanId, 0, 10, true)).isEmpty();
+        feedService.removePost(second.getId(), operatorId, "验证下架");
+        assertThat(feedService.countVisible(fanId, true)).isEqualTo(1);
+        favoriteService.remove(fanId, talentId);
+        assertThat(feedService.square(fanId, 0, 10, true)).isEmpty();
+        assertThat(feedService.countVisible(fanId, true)).isZero();
     }
 
     // ===== 9.1 发布与图片上限 =====

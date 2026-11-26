@@ -132,19 +132,33 @@ public class FeedService {
 
     /** 广场：按发布时间倒序分页。只返回可见的。 */
     public List<PostDetail> square(Long viewerUserId, int page, int size) {
+        return square(viewerUserId, page, size, false);
+    }
+
+    public List<PostDetail> square(Long viewerUserId, int page, int size, boolean followed) {
         int limit = Math.min(Math.max(size, 1), 50);
         int offset = Math.max(page, 0) * limit;
-        List<FeedPost> posts = postMapper.selectList(Wrappers.<FeedPost>lambdaQuery()
-                .eq(FeedPost::getStatus, FeedPost.VISIBLE)
+        List<FeedPost> posts = postMapper.selectList(visibleQuery(viewerUserId, followed)
                 // 同一毫秒内多条由自增 id 兜定顺序，否则翻页会漏条或重条
                 .orderByDesc(FeedPost::getId)
                 .last("LIMIT " + limit + " OFFSET " + offset));
         return assemble(posts, viewerUserId);
     }
 
-    public long countVisible() {
-        return postMapper.selectCount(Wrappers.<FeedPost>lambdaQuery()
-                .eq(FeedPost::getStatus, FeedPost.VISIBLE));
+    public long countVisible() { return countVisible(null, false); }
+
+    public long countVisible(Long viewerUserId, boolean followed) {
+        return postMapper.selectCount(visibleQuery(viewerUserId, followed));
+    }
+
+    private com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<FeedPost> visibleQuery(Long viewerUserId, boolean followed) {
+        var query = Wrappers.<FeedPost>lambdaQuery().eq(FeedPost::getStatus, FeedPost.VISIBLE);
+        if (followed) {
+            // 参数绑定当前会话用户，客户端不能指定其他人的关注列表。
+            query.apply("talent_id IN (SELECT talent_id FROM talent_favorite WHERE user_id = {0})",
+                    viewerUserId == null ? -1L : viewerUserId);
+        }
+        return query;
     }
 
     /** 某位主播的动态，用于详情页。 */

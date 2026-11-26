@@ -31,7 +31,10 @@ public class RandomMatchService {
                            String gender,
                            boolean onlineOnly,
                            boolean excludeOrdered,
-                           List<Long> excludeIds) {
+                           List<Long> excludeIds, Integer level) {
+        public Criteria(String categoryCode, String gender, boolean onlineOnly, boolean excludeOrdered, List<Long> excludeIds) {
+            this(categoryCode, gender, onlineOnly, excludeOrdered, excludeIds, null);
+        }
     }
 
     /**
@@ -44,7 +47,7 @@ public class RandomMatchService {
         List<Long> exclude = criteria.excludeIds() == null ? List.of() : criteria.excludeIds();
         Long id = queryMapper.findRandomId(
                 trimToNull(criteria.categoryCode()),
-                trimToNull(criteria.gender()),
+                trimToNull(criteria.gender()), criteria.level(),
                 criteria.onlineOnly(),
                 criteria.excludeOrdered() ? fanUserId : null,
                 exclude);
@@ -54,7 +57,7 @@ public class RandomMatchService {
             // 候选只剩一位时，一直换不出新人是正常的，不该表现为「无结果」。
             id = queryMapper.findRandomId(
                     trimToNull(criteria.categoryCode()),
-                    trimToNull(criteria.gender()),
+                    trimToNull(criteria.gender()), criteria.level(),
                     criteria.onlineOnly(),
                     criteria.excludeOrdered() ? fanUserId : null,
                     List.of());

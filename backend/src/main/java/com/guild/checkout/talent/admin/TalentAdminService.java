@@ -53,7 +53,10 @@ public class TalentAdminService {
                               String gender,
                               Integer age,
                               String region,
-                              List<String> promoTags) {
+                              List<String> promoTags, Integer level) {
+        public ProfileForm(String nickname, String intro, String coverUrl, Integer sortOrder, String gender, Integer age, String region, List<String> promoTags) {
+            this(nickname, intro, coverUrl, sortOrder, gender, age, region, promoTags, null);
+        }
     }
 
     private final TalentMapper talentMapper;
@@ -71,6 +74,10 @@ public class TalentAdminService {
         this.userService = userService;
     }
 
+    private static void validateLevel(Integer level) {
+        if (level != null && (level < 1 || level > 6)) throw new BusinessException("主播等级需在 1 到 6 之间");
+    }
+
     @Transactional
     public Talent create(ProfileForm form) {
         requireText(form.nickname(), "昵称");
@@ -79,6 +86,8 @@ public class TalentAdminService {
         List<String> promoTags = normalizePromoTags(form.promoTags());
 
         Talent talent = new Talent();
+        validateLevel(form.level());
+        talent.setLevel(form.level() == null ? 1 : form.level());
         talent.setNickname(form.nickname().trim());
         talent.setIntro(trimToNull(form.intro()));
         talent.setCoverUrl(trimToNull(form.coverUrl()));
@@ -128,6 +137,12 @@ public class TalentAdminService {
         if (sortOrder != null) {
             talent.setSortOrder(sortOrder);
             update.set(Talent::getSortOrder, sortOrder);
+            changed = true;
+        }
+        if (form.level() != null) {
+            validateLevel(form.level());
+            talent.setLevel(form.level());
+            update.set(Talent::getLevel, form.level());
             changed = true;
         }
         if (form.gender() != null) {
