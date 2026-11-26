@@ -1,208 +1,227 @@
 <script setup lang="ts">
-import AudioPreview from '@/components/AudioPreview.vue'
-import type { TalentCard } from '@/api/talent'
-
-defineProps<{ talent: TalentCard }>()
-
-/** 性别符号。未填写返回 null，调用处据此整项不渲染，不展示占位。 */
-function genderMark(g: TalentCard['gender']) {
-  if (g === 'FEMALE') return '♀'
-  if (g === 'MALE') return '♂'
-  return null
-}
-
-/** 封面缺失时用昵称首字兜底，比一个灰色人形图标体面。 */
-function initial(nickname: string) {
-  return nickname.trim().charAt(0) || '·'
+import { ref } from 'vue';
+import AudioPreview from './AudioPreview.vue';
+import TalentPortrait from './TalentPortrait.vue';
+import type { AvatarFrame } from '@/types/avatar-frame';
+import { talentApi, type TalentCard } from '@/api/talent';
+const props = defineProps<{
+  talent: TalentCard & { demo?: boolean; avatarFrame?: AvatarFrame | null };
+  favorited?: boolean;
+}>();
+const emit = defineEmits<{ favorite: [value: boolean] }>();
+const busy = ref(false);
+async function favorite() {
+  if (busy.value) return;
+  if (props.talent.demo) {
+    emit('favorite', !props.favorited);
+    return;
+  }
+  busy.value = true;
+  try {
+    if (props.favorited) await talentApi.unfavorite(props.talent.id);
+    else await talentApi.favorite(props.talent.id);
+    emit('favorite', !props.favorited);
+  } finally {
+    busy.value = false;
+  }
 }
 </script>
-
 <template>
-  <article class="card">
+  <article
+    class="talent-card"
+    tabindex="0"
+    role="link"
+    :aria-label="talent.nickname + '的详情'"
+    @keydown.enter.self="($event.currentTarget as HTMLElement).click()"
+  >
     <div class="cover">
-      <img v-if="talent.coverUrl" :src="talent.coverUrl" alt="" />
-      <span v-else class="fallback">{{ initial(talent.nickname) }}</span>
-      <AudioPreview
+      <TalentPortrait
+        :src="talent.coverUrl"
+        :seed="talent.id"
+        :name="talent.nickname"
+        :frame="talent.avatarFrame"
+      /><AudioPreview
         v-if="talent.audioUrl"
-        class="on-cover badge"
+        class="on-cover"
         :url="talent.audioUrl"
         :seconds="talent.audioSeconds"
       />
     </div>
-
     <div class="info">
-      <div class="row-top">
-        <span class="name">{{ talent.nickname }}</span>
-        <span v-if="genderMark(talent.gender)" class="gender" :class="talent.gender?.toLowerCase()">
-          {{ genderMark(talent.gender) }}<i v-if="talent.age" class="num">{{ talent.age }}</i>
-        </span>
-        <span v-if="talent.region" class="region">· {{ talent.region }}</span>
-        <span class="status" :class="{ online: talent.online }">
-          <i class="dot"></i>{{ talent.online ? '在线' : '离线' }}
-        </span>
+      <div class="name-row">
+        <b>{{ talent.nickname }}</b
+        ><span class="status" :class="{ online: talent.online }"
+          >● {{ talent.online ? '在线' : '离线' }}</span
+        >
       </div>
-
-      <div v-if="talent.tags.length" class="skills">
-        <template v-for="(tag, i) in talent.tags" :key="tag">
-          <span v-if="i > 0" class="sep">|</span>
-          <span>{{ tag }}</span>
-        </template>
+      <div class="meta">
+        <span v-if="talent.demo" class="demo-label">模拟</span>
+        <span v-if="talent.level" class="talent-level"
+          >♛ LV.{{ talent.level }}</span
+        ><span
+          v-if="talent.gender"
+          class="gender"
+          :class="{ male: talent.gender === 'MALE' }"
+          >{{ talent.gender === 'MALE' ? '♂' : '♀'
+          }}{{ talent.age || '' }}</span
+        ><span v-if="talent.region" class="region">{{ talent.region }}</span>
       </div>
-
-      <div v-if="talent.promoTags.length" class="promos">
-        <span v-for="p in talent.promoTags" :key="p" class="promo">{{ p }}</span>
+      <div class="skills">{{ talent.tags.join(' ｜ ') }}</div>
+      <div class="card-bottom">
+        <div class="promos">
+          <span v-for="p in talent.promoTags" :key="p">{{ p }}</span>
+        </div>
+        <button
+          :disabled="busy"
+          class="favorite"
+          :class="{ on: favorited }"
+          :aria-label="favorited ? '取消收藏' : '收藏主播'"
+          @click.stop="favorite"
+        >
+          {{ favorited ? '♥' : '♡' }}
+        </button>
       </div>
     </div>
   </article>
 </template>
-
 <style scoped>
-.card {
+.talent-card {
   display: flex;
-  gap: var(--sp-3);
-  background: var(--c-surface);
-  border-radius: var(--r-lg);
-  padding: var(--sp-3);
-  box-shadow: var(--sd-card);
+  gap: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: 12px;
   cursor: pointer;
+  min-width: 0;
 }
-
 .cover {
-  position: relative;
-  width: 92px;
-  height: 116px;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 10px;
   flex: none;
-  border-radius: var(--r-md);
-  overflow: hidden;
-  background: var(--g-avatar);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  overflow: visible;
 }
-
-.cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.fallback {
-  font-size: var(--fs-2xl);
-  font-weight: 300;
-  color: #fff;
-}
-
-.badge {
+.on-cover {
   position: absolute;
-  left: var(--sp-2);
-  bottom: var(--sp-2);
+  bottom: 4px;
+  left: 5px;
 }
-
 .info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding-top: var(--sp-1);
+  padding-top: 2px;
 }
-
-.row-top {
+.name-row {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
 }
-
-.name {
-  font-size: var(--fs-lg);
-  font-weight: 600;
+.name-row b {
+  font-size: 17px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.gender {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  flex: none;
-}
-
-.gender.female {
-  color: #ff6b9d;
-}
-
-.gender.male {
-  color: #4b9bff;
-}
-
-.gender i {
-  font-style: normal;
-}
-
-.region {
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
-  flex: none;
-}
-
 .status {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  font-size: var(--fs-xs);
-  color: var(--c-text-3);
-  background: var(--c-bg);
-  border-radius: var(--r-pill);
-  padding: 2px 8px;
-  flex: none;
+  color: #b7babf;
+  font-size: 10px;
+  white-space: nowrap;
 }
-
-.status .dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c-offline);
-}
-
 .status.online {
-  color: var(--c-online);
-  background: rgba(56, 193, 114, 0.1);
+  color: #23bb9d;
 }
-
-.status.online .dot {
-  background: var(--c-online);
-}
-
-.skills {
-  font-size: var(--fs-sm);
-  color: var(--c-text-2);
+.meta {
   display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
   flex-wrap: wrap;
-  gap: var(--sp-1);
 }
-
-.skills .sep {
-  color: var(--c-border);
+.demo-label {
+  font-size: 9px;
+  color: #9296aa;
+  border: 1px solid #e2e4ee;
+  padding: 1px 4px;
+  border-radius: 4px;
 }
-
+.talent-level {
+  font-size: 9px;
+  color: #818bd0;
+  background: linear-gradient(100deg, #e4e8ff, #f7e8fa);
+  border-radius: 8px;
+  padding: 2px 6px;
+}
+.gender {
+  color: #f18abd;
+  background: #ffedf6;
+  font-size: 10px;
+  border-radius: 7px;
+  padding: 2px 5px;
+}
+.gender.male {
+  color: #689eed;
+  background: #eaf3ff;
+}
+.region {
+  font-size: 10px;
+  color: #a6abb0;
+}
+.skills {
+  color: #9ba2a4;
+  font-size: 11px;
+  margin-top: 10px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 .promos {
   display: flex;
+  gap: 4px;
+  flex: 1;
   flex-wrap: wrap;
-  gap: var(--sp-2);
 }
-
-.promo {
-  font-size: var(--fs-sm);
-  color: var(--c-text-2);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-sm);
-  padding: 3px 10px;
-  background: var(--c-surface);
+.promos span {
+  background: #fff;
+  border: 1px solid #eee;
+  color: #96999d;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.favorite {
+  border: 0;
+  background: none;
+  color: #b9c3c8;
+  font-size: 25px;
+  padding: 0 2px;
+  line-height: 26px;
+}
+.favorite.on {
+  color: #ff6a9d;
+}
+@media (max-width: 350px) {
+  .cover {
+    width: 88px;
+    height: 88px;
+  }
+  .talent-card {
+    gap: 9px;
+  }
+  .name-row b {
+    font-size: 15px;
+  }
 }
 </style>

@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
-import { Icon } from 'vant'
-import { release, takeOver } from '@/utils/audioRegistry'
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { Icon, showToast } from 'vant';
+import { release, takeOver } from '@/utils/audioRegistry';
 
 const props = defineProps<{
-  url: string
-  seconds?: number | null
-}>()
+  url: string;
+  seconds?: number | null;
+}>();
 
-const playing = ref(false)
-let audio: HTMLAudioElement | null = null
+const playing = ref(false);
+const measuredSeconds = ref<number | null>(null);
+const displaySeconds = computed(() => measuredSeconds.value ?? props.seconds);
+const synthetic = computed(() => props.url.startsWith('/audio/demo/'));
+let audio: HTMLAudioElement | null = null;
+let playRequest = 0;
 
 /*
  * 「同时只播一条」的登记放在 utils/audioRegistry 里，不能写在这里：
@@ -19,54 +23,86 @@ let audio: HTMLAudioElement | null = null
 
 function toggle(event: Event) {
   // 卡片整体可点进详情，试听不该顺带跳转
-  event.stopPropagation()
-  event.preventDefault()
+  event.stopPropagation();
+  event.preventDefault();
 
   if (!audio) {
-    audio = new Audio(props.url)
+    audio = new Audio(props.url);
+    audio.preload = 'none';
+    audio.addEventListener('loadedmetadata', () => {
+      if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+        measuredSeconds.value = Math.max(1, Math.round(audio.duration));
+      }
+    });
     // 自然播完与出错都走 stop：只把 playing 置假会让「当前播放者」
     // 的登记继续指着自己，后续播放者要多停一次已经停下的音频
-    audio.addEventListener('ended', stop)
-    audio.addEventListener('error', stop)
+    audio.addEventListener('ended', stop);
+    audio.addEventListener('error', () => {
+      stop();
+      showToast('语音暂时无法播放，请重试');
+    });
   }
   if (playing.value) {
-    stop()
-    return
+    stop();
+    return;
   }
 
   // 先停掉别人，再播自己
-  takeOver(stop)
-  const el = audio
+  takeOver(stop);
+  const el = audio;
+  const request = ++playRequest;
+  playing.value = true;
   void el
     .play()
     .then(() => {
-      playing.value = true
+      if (request !== playRequest) return;
+      playing.value = true;
     })
     // 播放失败同样要撤销登记，否则下一个播放者会先去停一个根本没响的音频
-    .catch(stop)
+    .catch(() => {
+      if (request !== playRequest) return;
+      stop();
+      showToast('语音暂时无法播放，请重试');
+    });
 }
 
 function stop() {
-  audio?.pause()
+  playRequest++;
+  audio?.pause();
   if (audio) {
-    audio.currentTime = 0
+    audio.currentTime = 0;
   }
-  playing.value = false
-  release(stop)
+  playing.value = false;
+  release(stop);
 }
+
+watch(
+  () => props.url,
+  () => {
+    stop();
+    audio = null;
+    measuredSeconds.value = null;
+  },
+);
 
 onBeforeUnmount(() => {
   // 卸载时若正是自己在播，必须把登记一并清掉，
   // 否则下一个播放者会去 stop 一个已经不存在的组件
-  stop()
-  audio = null
-})
+  stop();
+  audio = null;
+});
 </script>
 
 <template>
-  <button class="audio" type="button" @click="toggle">
+  <button
+    class="audio"
+    type="button"
+    :aria-pressed="playing"
+    :aria-label="`${playing ? '停止' : '播放'}${synthetic ? '合成示例' : '主播'}语音${displaySeconds ? `，${displaySeconds}秒` : ''}`"
+    @click="toggle"
+  >
     <Icon :name="playing ? 'pause-circle-o' : 'play-circle-o'" size="16" />
-    <span v-if="seconds">{{ seconds }}"</span>
+    <span v-if="displaySeconds">{{ displaySeconds }}"</span>
     <span v-else>试听</span>
   </button>
 </template>

@@ -43,21 +43,29 @@ export interface CrushWallItem {
 }
 
 export const feedApi = {
-  square: (page = 0, size = 10) =>
-    http.get<FeedPostPage>(`/api/feed/posts?page=${page}&size=${size}`),
+  detail: (id: number) => http.get<FeedPostView>(`/api/feed/posts/${id}`),
+  square: (page = 0, size = 10, followed = false) =>
+    http.get<FeedPostPage>(
+      `/api/feed/posts?page=${page}&size=${size}&followed=${followed}`,
+    ),
 
   byTalent: (talentId: number, limit = 5) =>
-    http.get<FeedPostView[]>(`/api/feed/talents/${talentId}/posts?limit=${limit}`),
+    http.get<FeedPostView[]>(
+      `/api/feed/talents/${talentId}/posts?limit=${limit}`,
+    ),
 
   /** 点赞与取消点赞都返回最新计数，前端不自己加减，避免与服务端漂移。 */
   like: (postId: number) => http.post<number>(`/api/feed/posts/${postId}/like`),
-  unlike: (postId: number) => http.delete<number>(`/api/feed/posts/${postId}/like`),
+  unlike: (postId: number) =>
+    http.delete<number>(`/api/feed/posts/${postId}/like`),
 
   comments: (postId: number) =>
     http.get<FeedCommentView[]>(`/api/feed/posts/${postId}/comments`),
 
   comment: (postId: number, content: string) =>
-    http.post<FeedCommentView>(`/api/feed/posts/${postId}/comments`, { content }),
+    http.post<FeedCommentView>(`/api/feed/posts/${postId}/comments`, {
+      content,
+    }),
 
   reportPost: (postId: number, reason: string) =>
     http.post<void>(`/api/feed/posts/${postId}/report`, { reason }),
@@ -69,10 +77,14 @@ export const feedApi = {
 export const talentFeedApi = {
   limits: () => http.get<{ maxImages: number }>('/api/talent/feed/limits'),
 
-  mine: (limit = 20) => http.get<FeedPostView[]>(`/api/talent/feed/posts?limit=${limit}`),
+  mine: (limit = 20) =>
+    http.get<FeedPostView[]>(`/api/talent/feed/posts?limit=${limit}`),
 
   publish: (content: string, images: string[]) =>
-    http.post<{ postId: number }>('/api/talent/feed/posts', { content, images }),
+    http.post<{ postId: number }>('/api/talent/feed/posts', {
+      content,
+      images,
+    }),
 
   uploadImage: async (file: File) => {
     const form = new FormData()

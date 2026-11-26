@@ -1,71 +1,83 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton, Button, PullRefresh } from 'vant'
-import { orderApi, OrderStatus, type OrderView } from '@/api/order'
-import { formatPrice } from '@/utils/money'
-import EmptyState from '@/components/EmptyState.vue'
+import { computed, onMounted, ref, watch } from 'vue';
+import Portrait from '@/components/Portrait.vue';
+import { useRoute, useRouter } from 'vue-router';
+import { NavBar, Skeleton, Button, PullRefresh } from 'vant';
+import { orderApi, OrderStatus, type OrderView } from '@/api/order';
+import { formatPrice } from '@/utils/money';
+import EmptyState from '@/components/EmptyState.vue';
 
-const router = useRouter()
-const orders = ref<OrderView[]>([])
-const loading = ref(true)
-const refreshing = ref(false)
+const router = useRouter();
+const route = useRoute();
+const status = ref(
+  typeof route.query.status === 'string' ? route.query.status : '',
+);
+watch(
+  () => route.query.status,
+  (v) => (status.value = typeof v === 'string' ? v : ''),
+);
+const orders = ref<OrderView[]>([]);
+const loading = ref(true);
+const refreshing = ref(false);
 
 /** 只分「进行中 / 已结束」两组。更细的筛选在这个量级上只是多一排要点的东西。 */
-const tab = ref<'ALL' | 'OPEN' | 'DONE'>('ALL')
+const tab = ref<'ALL' | 'OPEN' | 'DONE'>('ALL');
 
 const OPEN_STATUSES: string[] = [
   OrderStatus.PENDING_PAYMENT,
   OrderStatus.PENDING_CONFIRM,
   OrderStatus.PENDING_ACCEPT,
   OrderStatus.ACCEPTED,
-]
+];
 
 const shown = computed(() => {
-  if (tab.value === 'ALL') return orders.value
-  const open = tab.value === 'OPEN'
-  return orders.value.filter((o) => OPEN_STATUSES.includes(o.status) === open)
-})
+  if (status.value)
+    return orders.value.filter((o) => o.status === status.value);
+  if (tab.value === 'ALL') return orders.value;
+  const open = tab.value === 'OPEN';
+  return orders.value.filter((o) => OPEN_STATUSES.includes(o.status) === open);
+});
 
-const openCount = computed(() => orders.value.filter((o) => OPEN_STATUSES.includes(o.status)).length)
+const openCount = computed(
+  () => orders.value.filter((o) => OPEN_STATUSES.includes(o.status)).length,
+);
 
-onMounted(load)
+onMounted(load);
 
 async function load() {
   try {
-    orders.value = await orderApi.myOrders()
+    orders.value = await orderApi.myOrders();
   } finally {
-    loading.value = false
-    refreshing.value = false
+    loading.value = false;
+    refreshing.value = false;
   }
 }
 
 function open(id: number) {
-  router.push(`/orders/${id}`)
+  router.push(`/orders/${id}`);
 }
 
 function reorder(order: OrderView, event: Event) {
-  event.stopPropagation()
-  router.push(`/talents/${order.talentId}/order`)
+  event.stopPropagation();
+  router.push(`/talents/${order.talentId}/order`);
 }
 
 /** 待办态标红，终止态变灰，其余用主色——比 Vant 的五色标签更容易一眼扫过。 */
 function toneOf(status: string) {
-  if (status === OrderStatus.PENDING_PAYMENT || status === OrderStatus.PENDING_CONFIRM) {
-    return 'urge'
+  if (
+    status === OrderStatus.PENDING_PAYMENT ||
+    status === OrderStatus.PENDING_CONFIRM
+  ) {
+    return 'urge';
   }
-  if (OPEN_STATUSES.includes(status)) return 'live'
-  if (status === OrderStatus.COMPLETED) return 'done'
-  return 'off'
-}
-
-function initial(nickname: string | null) {
-  return (nickname ?? '').trim().charAt(0) || '·'
+  if (OPEN_STATUSES.includes(status)) return 'live';
+  if (status === OrderStatus.COMPLETED) return 'done';
+  return 'off';
 }
 
 function dayText(iso: string) {
-  const at = new Date(iso)
-  return `${at.getMonth() + 1}/${at.getDate()}`
+  const at = new Date(iso);
+  return `${at.getMonth() + 1}/${at.getDate()}`;
 }
 </script>
 
@@ -77,31 +89,77 @@ function dayText(iso: string) {
 
     <PullRefresh v-else v-model="refreshing" @refresh="load">
       <nav v-if="orders.length" class="tabs">
-        <button :class="{ on: tab === 'ALL' }" @click="tab = 'ALL'">
+        <button
+          :class="{ on: tab === 'ALL' }"
+          @click="
+            status = '';
+            tab = 'ALL';
+          "
+        >
           全部 {{ orders.length }}
         </button>
-        <button :class="{ on: tab === 'OPEN' }" @click="tab = 'OPEN'">
+        <button
+          :class="{ on: tab === 'OPEN' }"
+          @click="
+            status = '';
+            tab = 'OPEN';
+          "
+        >
           进行中 {{ openCount }}
         </button>
-        <button :class="{ on: tab === 'DONE' }" @click="tab = 'DONE'">
+        <button
+          :class="{ on: tab === 'DONE' }"
+          @click="
+            status = '';
+            tab = 'DONE';
+          "
+        >
           已结束 {{ orders.length - openCount }}
         </button>
       </nav>
 
+      <nav class="status-tabs">
+        <button
+          v-for="t in [
+            { key: '', label: '全部' },
+            { key: 'PENDING_PAYMENT', label: '待付款' },
+            { key: 'PENDING_ACCEPT', label: '待接单' },
+            { key: 'ACCEPTED', label: '服务中' },
+            { key: 'COMPLETED', label: '已完成' },
+          ]"
+          :key="t.key"
+          :class="{ on: status === t.key }"
+          @click="status = t.key"
+        >
+          {{ t.label }}
+        </button>
+      </nav>
       <EmptyState v-if="orders.length === 0" description="还没有订单">
-        <Button type="primary" round @click="router.push('/')">去看看主播</Button>
+        <Button type="primary" round @click="router.push('/')"
+          >去看看主播</Button
+        >
       </EmptyState>
-      <EmptyState v-else-if="shown.length === 0" description="这一类暂时没有订单" />
+      <EmptyState
+        v-else-if="shown.length === 0"
+        description="这一类暂时没有订单"
+      />
 
       <div v-else class="list">
-        <article v-for="o in shown" :key="o.id" class="card" @click="open(o.id)">
+        <article
+          v-for="o in shown"
+          :key="o.id"
+          class="card"
+          @click="open(o.id)"
+        >
           <header class="head">
-            <div class="avatar">{{ initial(o.talentNickname) }}</div>
+            <div class="avatar"><Portrait :seed="o.talentId" round /></div>
             <div class="who">
               <span class="talent">{{ o.talentNickname ?? '主播' }}</span>
               <span class="day">{{ dayText(o.createdAt) }}</span>
             </div>
-            <span class="state" :class="toneOf(o.status)">{{ o.statusLabel }}</span>
+            <span class="state" :class="toneOf(o.status)">{{
+              o.statusLabel
+            }}</span>
           </header>
 
           <p class="service">
@@ -294,5 +352,36 @@ function dayText(iso: string) {
   font-size: var(--fs-sm);
   color: var(--c-text-2);
   cursor: pointer;
+}
+.status-tabs {
+  display: flex;
+  justify-content: space-around;
+  padding: 17px 12px 0;
+  gap: 10px;
+}
+.status-tabs button {
+  border: 0;
+  background: none;
+  color: #aaa;
+  padding: 5px 0;
+  font-size: 12px;
+}
+.status-tabs button.on {
+  color: #0dbfb5;
+  border-bottom: 2px solid #0dbfb5;
+}
+.page {
+  background: #f6f7f8;
+}
+.tabs button {
+  box-shadow: none;
+  border-radius: 7px;
+}
+.card {
+  box-shadow: none;
+  border-radius: 12px;
+}
+.card .avatar {
+  overflow: hidden;
 }
 </style>

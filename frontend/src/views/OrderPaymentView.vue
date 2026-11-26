@@ -1,56 +1,68 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { NavBar, Skeleton, Button, Uploader, Image as VanImage, showToast, type UploaderFileListItem } from 'vant'
-import { paymentApi, type ManualPayload, type PaymentPage } from '@/api/payment'
-import { formatPrice } from '@/utils/money'
-import EmptyState from '@/components/EmptyState.vue'
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import {
+  NavBar,
+  Skeleton,
+  Button,
+  Uploader,
+  Image as VanImage,
+  showToast,
+  type UploaderFileListItem,
+} from 'vant';
+import {
+  paymentApi,
+  type ManualPayload,
+  type PaymentPage,
+} from '@/api/payment';
+import { formatPrice } from '@/utils/money';
+import EmptyState from '@/components/EmptyState.vue';
 
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 
-const orderId = computed(() => Number(route.params.id))
-const page = ref<PaymentPage | null>(null)
-const loading = ref(true)
-const uploading = ref(false)
+const orderId = computed(() => Number(route.params.id));
+const page = ref<PaymentPage | null>(null);
+const loading = ref(true);
+const uploading = ref(false);
 
 /** 人工收款分支的数据。其他 kind 走各自分支，不复用这里。 */
 const manual = computed<ManualPayload | null>(() => {
-  const ins = page.value?.instruction
-  if (!ins || ins.kind !== 'DISPLAY_AND_UPLOAD') return null
-  return ins.payload as unknown as ManualPayload
-})
+  const ins = page.value?.instruction;
+  if (!ins || ins.kind !== 'DISPLAY_AND_UPLOAD') return null;
+  return ins.payload as unknown as ManualPayload;
+});
 
-onMounted(load)
+onMounted(load);
 
 async function load() {
   try {
-    page.value = await paymentApi.page(orderId.value)
+    page.value = await paymentApi.page(orderId.value);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function onUpload(item: UploaderFileListItem | UploaderFileListItem[]) {
-  const entry = Array.isArray(item) ? item[0] : item
-  const file = entry?.file
-  if (!file) return
+  const entry = Array.isArray(item) ? item[0] : item;
+  const file = entry?.file;
+  if (!file) return;
 
-  uploading.value = true
+  uploading.value = true;
   try {
-    await paymentApi.uploadProof(orderId.value, file)
-    showToast('凭证已提交，等待核对')
-    await load()
+    await paymentApi.uploadProof(orderId.value, file);
+    showToast('凭证已提交，等待核对');
+    await load();
   } catch (e) {
-    showToast(e instanceof Error ? e.message : '上传失败')
+    showToast(e instanceof Error ? e.message : '上传失败');
   } finally {
-    uploading.value = false
+    uploading.value = false;
   }
 }
 
 function copy(text: string | null) {
-  if (!text) return
-  void navigator.clipboard?.writeText(text).then(() => showToast('已复制'))
+  if (!text) return;
+  void navigator.clipboard?.writeText(text).then(() => showToast('已复制'));
 }
 </script>
 
@@ -74,11 +86,18 @@ function copy(text: string | null) {
       </p>
 
       <template v-else-if="manual">
-        <p v-if="!manual.ready" class="warn">收款信息尚未配置，请联系客服后再付款</p>
+        <p v-if="!manual.ready" class="warn">
+          收款信息尚未配置，请联系客服后再付款
+        </p>
 
         <template v-else>
           <section v-if="manual.qrUrl" class="block qr">
-            <VanImage :src="manual.qrUrl" width="180" height="180" fit="contain" />
+            <VanImage
+              :src="manual.qrUrl"
+              width="180"
+              height="180"
+              fit="contain"
+            />
             <p class="qr-tip">长按识别或保存收款码</p>
           </section>
 
@@ -87,9 +106,15 @@ function copy(text: string | null) {
             <div v-if="manual.accountName" class="row">
               <span>户名</span><span>{{ manual.accountName }}</span>
             </div>
-            <button v-if="manual.accountNo" class="row tap" @click="copy(manual.accountNo)">
+            <button
+              v-if="manual.accountNo"
+              class="row tap"
+              @click="copy(manual.accountNo)"
+            >
               <span>账号</span>
-              <span class="copyable num">{{ manual.accountNo }}<i>复制</i></span>
+              <span class="copyable num"
+                >{{ manual.accountNo }}<i>复制</i></span
+              >
             </button>
             <div v-if="manual.bankName" class="row">
               <span>开户行</span><span>{{ manual.bankName }}</span>
@@ -104,16 +129,27 @@ function copy(text: string | null) {
             这句是整页最要紧的一句话，所以单独成块而不是混在灰色小字里：
             备注里没有订单号，到账就对不上订单，粉丝的钱会卡在那儿等人工排查。
           -->
-          <p class="must">转账时请在备注里填上订单号，否则我们无法把到账和你的订单对上。</p>
+          <p class="must">
+            转账时请在备注里填上订单号，否则我们无法把到账和你的订单对上。
+          </p>
           <p v-if="manual.tips" class="tips">{{ manual.tips }}</p>
 
           <section class="block info">
             <h3>支付凭证</h3>
-            <Uploader :max-count="5" :after-read="onUpload" :disabled="uploading" accept="image/*" />
-            <p class="tips">付款后请上传转账截图，运营核对到账后会通知主播接单。</p>
+            <Uploader
+              :max-count="5"
+              :after-read="onUpload"
+              :disabled="uploading"
+              accept="image/*"
+            />
+            <p class="tips">
+              付款后请上传转账截图，运营核对到账后会通知主播接单。
+            </p>
             <div v-for="p in page.proofs" :key="p.id" class="row">
               <span>已上传</span>
-              <span class="num">{{ p.uploadedAt?.replace('T', ' ').slice(0, 16) }}</span>
+              <span class="num">{{
+                p.uploadedAt?.replace('T', ' ').slice(0, 16)
+              }}</span>
             </div>
           </section>
         </template>
@@ -122,7 +158,9 @@ function copy(text: string | null) {
       <p v-else class="tips">该支付方式的前端尚未接入</p>
 
       <div class="actions">
-        <Button block round @click="router.push(`/orders/${orderId}`)">返回订单详情</Button>
+        <Button block round @click="router.push(`/orders/${orderId}`)"
+          >返回订单详情</Button
+        >
       </div>
     </template>
   </div>
@@ -265,5 +303,24 @@ function copy(text: string | null) {
 
 .actions {
   padding: var(--sp-4);
+}
+.page {
+  background: linear-gradient(#def9f3, #f5f7f8 300px);
+}
+.block {
+  box-shadow: none;
+  border-radius: 14px;
+}
+.money {
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+}
+.amount {
+  color: #f17f99;
+}
+.notice {
+  font-size: 12px;
+  line-height: 1.8;
 }
 </style>

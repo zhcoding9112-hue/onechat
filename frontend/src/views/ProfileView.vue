@@ -1,17 +1,64 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton } from 'vant'
-import { fetchCurrentUser, type CurrentUser } from '@/api/session'
-import { fanLevelApi, type FanLevel } from '@/api/fanLevel'
-import LevelBadge from '@/components/LevelBadge.vue'
-import AvatarFrame from '@/components/AvatarFrame.vue'
-import { centsToYuan } from '@/utils/money'
-import FanTabBar from '@/components/FanTabBar.vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { Skeleton, Popup, Icon } from 'vant';
+import { fetchCurrentUser, type CurrentUser } from '@/api/session';
+import { fanLevelApi, type FanLevel } from '@/api/fanLevel';
+import LevelBadge from '@/components/LevelBadge.vue';
+import Portrait from '@/components/Portrait.vue';
+import WingFrame from '@/components/WingFrame.vue';
+import GiftArt from '@/components/GiftArt.vue';
+import GiftPreview from '@/components/GiftPreview.vue';
+import { creditApi } from '@/api/credit';
+import { centsToYuan } from '@/utils/money';
+import FanTabBar from '@/components/FanTabBar.vue';
 
-const router = useRouter()
-const me = ref<CurrentUser | null>(null)
-const level = ref<FanLevel | null>(null)
+const router = useRouter();
+const SupportDialog = defineAsyncComponent(
+  () => import('@/components/SupportDialog.vue'),
+);
+const supportOpen = ref(false);
+const me = ref<CurrentUser | null>(null);
+const level = ref<FanLevel | null>(null);
+const balance = ref<number | null>(null);
+const sheet = ref('');
+const preview = ref(false);
+const giftKind = ref('heart');
+const giftKinds = [
+  'heart',
+  'rose',
+  'diamond',
+  'crown',
+  'castle',
+  'ring',
+  'rocket',
+  'candy',
+];
+const giftNames = [
+  '怦然心动',
+  '玫瑰花束',
+  '璀璨星光',
+  '为你加冕',
+  '梦幻城堡',
+  '心动约定',
+  '星际旅行',
+  '甜蜜糖果',
+];
+const menu = [
+  { icon: 'gift-o', name: '我要打赏', path: '/wall' },
+  { icon: 'like-o', name: '我的收藏', path: '/me/favorites' },
+  { icon: 'coupon-o', name: '优惠券', path: '/me/coupons' },
+  { icon: 'gem-o', name: '我的等级', sheet: 'level' },
+  { icon: 'medal-o', name: '人气榜单', path: '/leaderboard' },
+  { icon: 'gift-o', name: '礼物图鉴', sheet: 'gifts' },
+  { icon: 'music-o', name: '试音选人', path: '/audition' },
+  { icon: 'service-o', name: '联系客服', sheet: 'support' },
+];
+function openMenu(item: (typeof menu)[number]) {
+  if (item.path) router.push(item.path);
+  else if (item.sheet === 'support') supportOpen.value = true;
+  else sheet.value = item.sheet ?? '';
+}
 
 /**
  * 当前等级内的进度。
@@ -22,238 +69,426 @@ const level = ref<FanLevel | null>(null)
  * 对粉丝来说正是想看的那个意思，也不会出现跨级后进度倒退。
  */
 const progress = computed(() => {
-  const l = level.value
-  if (!l || l.toNextCents === null) return 100
-  const total = l.spentCents + l.toNextCents
-  if (total <= 0) return 0
-  return Math.min(100, Math.max(2, Math.round((l.spentCents / total) * 100)))
-})
-const loading = ref(true)
+  const l = level.value;
+  if (!l || l.toNextCents === null) return 100;
+  const total = l.spentCents + l.toNextCents;
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(2, Math.round((l.spentCents / total) * 100)));
+});
+const loading = ref(true);
 
 onMounted(async () => {
+  void creditApi
+    .balance()
+    .then((v) => (balance.value = v))
+    .catch(() => {});
   try {
-    me.value = await fetchCurrentUser()
+    me.value = await fetchCurrentUser();
   } finally {
-    loading.value = false
+    loading.value = false;
   }
   // 等级加载失败不该挡住整页，单独 catch 掉
   try {
-    level.value = await fanLevelApi.mine()
+    level.value = await fanLevelApi.mine();
   } catch {
-    level.value = null
+    level.value = null;
   }
-})
+});
 </script>
-
 <template>
-  <div class="page">
-    <NavBar title="我的" />
-
-    <Skeleton v-if="loading" avatar :row="3" style="padding: 16px" />
-
-    <template v-else-if="me">
-      <!-- 头部：头像、昵称、等级与累计消费合成一张卡，而不是四段分开的灰条 -->
-      <section class="hero" :class="level ? `tier${level.level}` : ''">
-        <AvatarFrame :src="me.avatarUrl" :level="level?.level ?? 1" :size="56" />
-        <div class="who">
-          <p class="name">{{ me.nickname }}</p>
-          <LevelBadge v-if="level" :level="level.level" :name="level.name" size="lg" />
-          <p v-if="me.placeholderProfile" class="hint">微信资料未获取到，不影响使用</p>
+  <div class="profile-page">
+    <h1 class="page-title">个人中心</h1>
+    <Skeleton v-if="loading" avatar :row="4" /><template v-else-if="me"
+      ><section class="profile-person">
+        <WingFrame
+          v-if="(level?.level ?? 0) >= 4"
+          :src="me.avatarUrl"
+          :seed="me.userId"
+          :size="58"
+        />
+        <div v-else class="profile-avatar">
+          <Portrait :src="me.avatarUrl" :seed="me.userId" round />
+        </div>
+        <div class="profile-name">
+          <h2>{{ me.nickname }}</h2>
+          <LevelBadge v-if="level" :level="level.level" :name="level.name" />
+        </div>
+        <button class="profile-info" @click="sheet = 'info'">个人资料 ›</button>
+      </section>
+      <section class="wallet-card">
+        <div class="wallet-label">我的元子 <span>✧</span></div>
+        <div class="wallet-value">
+          <b>{{ balance ?? '—' }}</b
+          ><button @click="router.push('/me/credits')">查看明细 ›</button>
+        </div>
+        <p>记录每一份温暖的陪伴</p>
+        <span class="wallet-orb o1" /><span class="wallet-orb o2" />
+      </section>
+      <section class="orders-card">
+        <header>
+          <h3>我的订单</h3>
+          <button @click="router.push('/orders')">全部订单 ›</button>
+        </header>
+        <div class="order-links">
+          <button @click="router.push('/orders?status=PENDING_PAYMENT')">
+            <Icon name="paid" size="28" />待付款</button
+          ><button @click="router.push('/orders?status=PENDING_ACCEPT')">
+            <Icon name="clock-o" size="28" />待接单</button
+          ><button @click="router.push('/orders?status=ACCEPTED')">
+            <Icon name="service-o" size="28" />服务中</button
+          ><button @click="router.push('/orders?status=COMPLETED')">
+            <Icon name="completed" size="28" />已完成
+          </button>
         </div>
       </section>
-
-      <!-- 等级只影响展示，不影响下单价格与分成 -->
-      <section v-if="level" class="block level-card">
-        <div class="row">
-          <span>累计消费</span>
-          <span class="num spent">¥{{ centsToYuan(level.spentCents) }}</span>
-        </div>
-
-        <!-- 进度条：只有还能升级时才画，满级画一条满的会让人以为还差一点 -->
-        <template v-if="level.toNextCents !== null">
-          <div class="bar"><i :style="{ width: progress + '%' }" /></div>
-          <p class="to-next">
-            还差 <b class="num">¥{{ centsToYuan(level.toNextCents) }}</b> 升到
-            <LevelBadge :level="(level.nextLevel ?? level.level + 1)" :name="level.nextName ?? ''" />
+      <section class="menu-card">
+        <h3>常用功能</h3>
+        <nav class="menu-grid">
+          <button
+            v-for="(item, i) in menu"
+            :key="item.name"
+            @click="openMenu(item)"
+          >
+            <Icon :name="item.icon" :class="'icon-' + i" size="28" />{{
+              item.name
+            }}
+          </button>
+        </nav>
+      </section>
+      <button v-if="me.talent" class="role-row" @click="router.push('/talent')">
+        主播工作台 <span>›</span></button
+      ><button
+        v-if="me.operator"
+        class="role-row"
+        @click="router.push('/admin')"
+      >
+        运营后台 <span>›</span>
+      </button>
+      <div class="profile-footer">♡ 晚星奶糖 · 陪伴每一份心动</div></template
+    ><Popup
+      :show="!!sheet"
+      position="bottom"
+      round
+      closeable
+      @update:show="
+        (v) => {
+          if (!v) sheet = '';
+        }
+      "
+      ><section class="profile-sheet">
+        <template v-if="sheet === 'info'"
+          ><h3>个人资料</h3>
+          <div class="info-row"><span>昵称</span>{{ me?.nickname }}</div>
+          <div class="info-row"><span>用户 ID</span>{{ me?.userId }}</div>
+          <div class="info-row">
+            <span>当前等级</span>{{ level?.name ?? '—' }}
+          </div>
+          <p class="muted">资料来自微信授权，暂无站内修改入口。</p></template
+        ><template v-else-if="sheet === 'level' && level"
+          ><h3>我的等级</h3>
+          <LevelBadge :level="level.level" :name="level.name" size="lg" />
+          <div class="spent">
+            累计消费 <b>¥{{ centsToYuan(level.spentCents) }}</b>
+          </div>
+          <div class="level-progress">
+            <i :style="{ width: progress + '%' }" />
+          </div>
+          <p class="muted">
+            {{
+              level.toNextCents === null
+                ? '已达到最高等级'
+                : `再消费 ¥${centsToYuan(level.toNextCents)} 可升级至 ${level.nextName}`
+            }}
           </p>
-        </template>
-        <p v-else class="to-next maxed">已是最高等级</p>
-      </section>
-
-      <nav class="block menu">
-        <button @click="router.push('/me/chats')"><span>消息</span></button>
-        <button @click="router.push('/feed')"><span>动态广场</span></button>
-        <button @click="router.push('/leaderboard')"><span>打赏榜</span></button>
-        <button @click="router.push('/orders')"><span>我的订单</span></button>
-        <button @click="router.push('/me/favorites')"><span>我的收藏</span></button>
-        <button @click="router.push('/me/coupons')"><span>我的优惠券</span></button>
-        <!-- 只有入口没有充值：元子页本身也不含任何充值、兑换与提现 -->
-        <button @click="router.push('/me/credits')"><span>我的元子</span></button>
-      </nav>
-
-      <!-- 身份态切换：只有主播角色才看得到 -->
-      <nav v-if="me.talent" class="block menu">
-        <button @click="router.push('/talent')"><span>进入主播工作台</span></button>
-      </nav>
-
-      <nav v-if="me.operator" class="block menu">
-        <button @click="router.push('/admin')"><span>进入运营后台</span></button>
-      </nav>
-
-      <div class="tab-space"></div>
-    </template>
-
+          <p class="muted">
+            等级只影响展示，服务价格以店员档位为准。
+          </p></template
+        ><template v-else-if="sheet === 'gifts'"
+          ><h3>礼物图鉴</h3>
+          <p class="muted">点击查看礼物动效</p>
+          <div class="gift-gallery">
+            <button
+              v-for="(g, i) in giftKinds"
+              :key="g"
+              @click="
+                giftKind = g;
+                preview = true;
+              "
+            >
+              <GiftArt :kind="g" :size="60" /><span>{{ giftNames[i] }}</span>
+            </button>
+          </div></template
+        >
+        <p v-else class="muted">暂未获取等级资料，请稍后重试。</p>
+      </section></Popup
+    ><GiftPreview :show="preview" :kind="giftKind" @close="preview = false" />
+    <SupportDialog v-if="supportOpen" v-model:show="supportOpen" />
     <FanTabBar />
   </div>
 </template>
-
 <style scoped>
-.page {
-  min-height: 100vh;
-  background: var(--g-page);
-  background-attachment: fixed;
+.profile-page {
+  min-height: 100dvh;
+  background: radial-gradient(ellipse at 0 0, #fff9da, transparent 55%),
+    linear-gradient(#d8faf1, #f5f6f7 400px);
+  padding: 0 15px
+    calc(var(--fan-tabbar-height) + 25px + env(safe-area-inset-bottom, 0px));
 }
-
-.hero {
+.profile-person {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-5) var(--sp-4);
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  gap: 15px;
+  padding: 10px 4px 25px;
 }
-
-/* 昵称与徽章分两行：徽章带翅膀后比文字高，挤在一行会把昵称顶歪 */
-.who {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-1);
+.profile-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid white;
+  flex: none;
+}
+.profile-name {
+  flex: 1;
   min-width: 0;
 }
-
-.who {
-  min-width: 0;
-}
-
-.name {
-  margin: 0;
-  font-size: var(--fs-lg);
+.profile-name h2 {
+  font-size: 19px;
   font-weight: 600;
+  margin: 0 0 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-/* 进度条：细一点，不要喧宾夺主盖过上面的金额 */
-.bar {
-  margin: var(--sp-3) 0 var(--sp-2);
-  height: 6px;
-  border-radius: var(--r-pill);
-  background: var(--c-border);
+.profile-info {
+  border: 0;
+  background: none;
+  color: #96a7a3;
+  font-size: 10px;
+  white-space: nowrap;
+  padding: 0;
+}
+.wallet-card {
+  position: relative;
+  background: linear-gradient(115deg, #3bd6ca, #28c7c4 55%, #4ed8d5);
+  color: white;
+  border-radius: 17px;
+  padding: 20px 22px 45px;
   overflow: hidden;
 }
-
-.bar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-  background: linear-gradient(90deg, var(--c-brand), #7fe3dc);
-  transition: width 0.6s ease;
+.wallet-label {
+  font-size: 12px;
+  position: relative;
+  z-index: 1;
+  letter-spacing: 1px;
 }
-
-/*
- * 头部按等级给一层很淡的氛围底。
- * 刻意只到「淡」为止：这是个人页，不是领奖台，底色压过头像就本末倒置了。
- */
-.hero.tier3 {
-  background: linear-gradient(135deg, #f7f9fc, var(--c-surface) 70%);
+.wallet-label span {
+  margin-left: 8px;
 }
-.hero.tier4 {
-  background: linear-gradient(135deg, #fff8e8, var(--c-surface) 70%);
-}
-.hero.tier5 {
-  background: linear-gradient(135deg, #f6efe2, var(--c-surface) 70%);
-}
-
-.hint {
-  margin: var(--sp-1) 0 0;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
-}
-
-.block {
-  margin: var(--sp-3) var(--sp-4) 0;
-  background: var(--c-surface);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sd-card);
-  overflow: hidden;
-}
-
-.level-card {
-  padding: var(--sp-4);
-}
-
-.row {
+.wallet-value {
+  position: relative;
+  z-index: 1;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  font-size: var(--fs-md);
+  margin-top: 10px;
 }
-
-.row > span:first-child {
-  color: var(--c-text-2);
-}
-
-.spent {
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  color: var(--c-price);
-}
-
-.to-next {
-  margin: var(--sp-2) 0 0;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
-}
-
-.to-next b {
-  color: var(--c-text-2);
-}
-
-/* 写成 .to-next.maxed 而不是 .maxed：.to-next 在它后面定义，
-   同特异性下后者赢，单写 .maxed 会被灰色盖掉 */
-.to-next.maxed {
-  color: var(--c-brand-deep);
+.wallet-value b {
+  font-size: 32px;
   font-weight: 600;
 }
-
-.menu button {
-  width: 100%;
-  border: none;
+.wallet-value button {
+  background: #fff;
+  border: 0;
+  color: #24c5b9;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 11px;
+}
+.wallet-card p {
+  font-size: 9px;
+  color: #e8ffff;
+  margin: 10px 0 0;
+}
+.wallet-orb {
+  position: absolute;
+  border: 20px solid #ffffff12;
+  border-radius: 50%;
+  width: 155px;
+  height: 155px;
+  right: -20px;
+  top: -65px;
+}
+.wallet-orb.o2 {
+  width: 220px;
+  height: 220px;
+  right: -50px;
+  top: -90px;
+  border: 1px solid #ffffff16;
+}
+.orders-card {
+  position: relative;
+  background: #fff;
+  border-radius: 15px;
+  padding: 18px 15px;
+  margin: -24px 0 14px;
+  z-index: 1;
+  box-shadow: 0 5px 20px #adb4bb0b;
+}
+.orders-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.orders-card h3,
+.menu-card h3 {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+}
+.orders-card header button {
+  background: none;
+  border: 0;
+  color: #aaa;
+  font-size: 10px;
+}
+.order-links {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 23px;
+  gap: 10px;
+}
+.order-links button {
+  border: 0;
   background: none;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  font-size: 11px;
+  color: #888;
+}
+.order-links span {
+  font-size: 27px;
+  line-height: 30px;
+  font-weight: 300;
+  color: #777;
+}
+.menu-card {
+  background: #fff;
+  border-radius: 15px;
+  padding: 18px 15px;
+}
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 25px 10px;
+  padding: 22px 0 8px;
+}
+.menu-grid button {
+  background: none;
+  border: 0;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 10px;
+  color: #888;
+  white-space: nowrap;
+  padding: 0;
+}
+.menu-grid button > span {
+  font-size: 29px;
+  line-height: 30px;
+  color: #81868a;
+  font-weight: 300;
+}
+.role-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-4);
-  font-size: var(--fs-md);
-  color: var(--c-text);
-  text-align: left;
-  cursor: pointer;
+  width: 100%;
+  padding: 17px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: white;
+  font-size: 13px;
+  color: #888;
 }
-
-.menu button + button {
-  border-top: 1px solid var(--c-border);
+.role-row span {
+  color: #bbb;
 }
-
-/* 右侧箭头用边框画，不引图标字体 */
-.menu button::after {
-  content: '';
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-top: 1.5px solid var(--c-text-3);
-  border-right: 1.5px solid var(--c-text-3);
-  transform: rotate(45deg);
+.profile-footer {
+  text-align: center;
+  color: #bdc9c7;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 25px 0;
 }
-
-.tab-space {
-  height: 68px;
+.profile-sheet {
+  padding: 23px 22px 30px;
+  max-height: 78dvh;
+  overflow: auto;
+  text-align: center;
+}
+.profile-sheet h3 {
+  font-size: 17px;
+  margin: 0 0 22px;
+  font-weight: 500;
+}
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 17px 0;
+  border-bottom: 1px solid #f3f3f3;
+  font-size: 13px;
+}
+.info-row span {
+  color: #999;
+}
+.profile-sheet > .muted {
+  line-height: 1.8;
+  margin: 18px 0 0;
+}
+.spent {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #888;
+  margin-top: 30px;
+}
+.spent b {
+  color: #eab0a0;
+  font-size: 19px;
+}
+.level-progress {
+  height: 6px;
+  border-radius: 6px;
+  background: #f0f2f2;
+  margin: 18px 0 0;
+  overflow: hidden;
+}
+.level-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #3dcbbb, #a4e4d6);
+  border-radius: 6px;
+}
+.gift-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px 8px;
+  margin-top: 20px;
+}
+.gift-gallery button {
+  background: none;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  font-size: 10px;
+  color: #aaa;
 }
 </style>

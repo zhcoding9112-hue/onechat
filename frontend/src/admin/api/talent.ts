@@ -13,6 +13,7 @@ export interface TalentAdminView {
   audioSeconds: number | null
   online: boolean
   listed: boolean
+  level: number
   sortOrder: number
   tags: string[]
   gender: Gender | null
@@ -26,6 +27,7 @@ export interface TalentProfilePayload {
   nickname?: string | null
   intro?: string | null
   coverUrl?: string | null
+  level?: number
   sortOrder?: number | null
   gender?: Gender | null
   age?: number | null
@@ -86,7 +88,8 @@ export interface ImportResult {
 export const talentAdminApi = {
   list: () => http.get<TalentAdminView[]>(BASE),
   detail: (id: number) => http.get<TalentAdminView>(`${BASE}/${id}`),
-  create: (payload: TalentProfilePayload) => http.post<TalentAdminView>(BASE, payload),
+  create: (payload: TalentProfilePayload) =>
+    http.post<TalentAdminView>(BASE, payload),
   update: (id: number, payload: TalentProfilePayload) =>
     http.put<TalentAdminView>(`${BASE}/${id}`, payload),
   setListed: (id: number, listed: boolean) =>

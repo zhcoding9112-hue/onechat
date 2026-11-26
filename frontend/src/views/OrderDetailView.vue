@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { NavBar, Skeleton, Button, Rate, showToast } from 'vant'
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { NavBar, Skeleton, Button, Rate, showToast } from 'vant';
 import {
   orderApi,
   surveyApi,
@@ -10,32 +10,33 @@ import {
   type HistoryEntry,
   type MySurvey,
   type OrderView,
-} from '@/api/order'
-import { formatPrice } from '@/utils/money'
-import EmptyState from '@/components/EmptyState.vue'
+} from '@/api/order';
+import { formatPrice } from '@/utils/money';
+import Portrait from '@/components/Portrait.vue';
+import EmptyState from '@/components/EmptyState.vue';
 
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 
-const orderId = computed(() => Number(route.params.id))
-const order = ref<OrderView | null>(null)
-const history = ref<HistoryEntry[]>([])
-const loading = ref(true)
-const survey = ref<MySurvey | null>(null)
-const pendingScore = ref(0)
-const rating = ref(false)
+const orderId = computed(() => Number(route.params.id));
+const order = ref<OrderView | null>(null);
+const history = ref<HistoryEntry[]>([]);
+const loading = ref(true);
+const survey = ref<MySurvey | null>(null);
+const pendingScore = ref(0);
+const rating = ref(false);
 
 onMounted(async () => {
   try {
-    order.value = await orderApi.detail(orderId.value)
-    history.value = await orderApi.history(orderId.value)
+    order.value = await orderApi.detail(orderId.value);
+    history.value = await orderApi.history(orderId.value);
     if (order.value.actions.includes('RATE')) {
-      survey.value = await surveyApi.mine(orderId.value)
+      survey.value = await surveyApi.mine(orderId.value);
     }
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-})
+});
 
 /**
  * 正常流程的四步进度；终止态不展示进度，改用提示条说明。
@@ -44,56 +45,60 @@ onMounted(async () => {
  * 这里的文案一直没跟着改，结果订单处于 ACCEPTED 时，状态标签写着「已接单」、
  * 进度条却高亮「服务中」，像是两个不同的状态。
  */
-const STEPS = ['付款', '等待接单', '已接单', '已完成']
+const STEPS = ['付款', '等待接单', '已接单', '已完成'];
 
 const stepIndex = computed(() => {
   switch (order.value?.status) {
     case OrderStatus.PENDING_PAYMENT:
     case OrderStatus.PENDING_CONFIRM:
-      return 0
+      return 0;
     case OrderStatus.PENDING_ACCEPT:
-      return 1
+      return 1;
     case OrderStatus.ACCEPTED:
-      return 2
+      return 2;
     case OrderStatus.COMPLETED:
-      return 3
+      return 3;
     default:
-      return -1
+      return -1;
   }
-})
+});
 
 /** 状态色：待办催一下，进行中用主色，终止态收敛成灰。 */
 function toneOf(status: string) {
-  if (status === OrderStatus.PENDING_PAYMENT || status === OrderStatus.PENDING_CONFIRM) {
-    return 'urge'
+  if (
+    status === OrderStatus.PENDING_PAYMENT ||
+    status === OrderStatus.PENDING_CONFIRM
+  ) {
+    return 'urge';
   }
   if (
     status === OrderStatus.TIMEOUT ||
     status === OrderStatus.CANCELLED ||
     status === OrderStatus.REFUNDED
   ) {
-    return 'off'
+    return 'off';
   }
-  return 'live'
+  return 'live';
 }
 
 async function submitRating() {
+  if (rating.value) return;
   if (pendingScore.value < 1) {
-    showToast('请先选择分数')
-    return
+    showToast('请先选择分数');
+    return;
   }
-  rating.value = true
+  rating.value = true;
   try {
-    survey.value = await surveyApi.submit(orderId.value, pendingScore.value)
-    showToast('感谢你的评价')
+    survey.value = await surveyApi.submit(orderId.value, pendingScore.value);
+    showToast('感谢你的评价');
   } finally {
-    rating.value = false
+    rating.value = false;
   }
 }
 
 function formatTime(value: string | null) {
-  if (!value) return '—'
-  return value.replace('T', ' ').slice(0, 19)
+  if (!value) return '—';
+  return value.replace('T', ' ').slice(0, 19);
 }
 </script>
 
@@ -121,14 +126,27 @@ function formatTime(value: string | null) {
           </li>
         </ol>
 
-        <p v-else-if="order.closeReason" class="closed">{{ order.closeReason }}</p>
+        <p v-else-if="order.closeReason" class="closed">
+          {{ order.closeReason }}
+        </p>
       </section>
 
       <!-- 金额：整页最该被看清的东西，单独一块 -->
       <section class="block money">
+        <button
+          class="order-person"
+          @click="router.push(`/talents/${order.talentId}`)"
+        >
+          <span><Portrait :seed="order.talentId" round /></span
+          ><b>{{ order.talentNickname }}</b
+          ><small>查看店员 ›</small>
+        </button>
         <div class="row">
           <span>{{ order.serviceItemName }} · {{ order.serviceSpecName }}</span>
-          <span class="num">{{ formatPrice(order.unitPriceCents) }} × {{ order.quantity }}</span>
+          <span class="num"
+            >{{ formatPrice(order.unitPriceCents) }} ×
+            {{ order.quantity }}</span
+          >
         </div>
         <!-- 没用券时原价与实付相同，多列一行只会让人以为被重复收费 -->
         <template v-if="order.couponDiscountCents > 0">
@@ -138,7 +156,9 @@ function formatTime(value: string | null) {
           </div>
           <div class="row cut">
             <span>优惠券抵扣</span>
-            <span class="num">-{{ formatPrice(order.couponDiscountCents) }}</span>
+            <span class="num"
+              >-{{ formatPrice(order.couponDiscountCents) }}</span
+            >
           </div>
         </template>
         <div class="row total">
@@ -149,22 +169,30 @@ function formatTime(value: string | null) {
 
       <section class="block info">
         <h3>服务信息</h3>
-        <div class="row"><span>主播</span><span>{{ order.talentNickname ?? '—' }}</span></div>
+        <div class="row">
+          <span>主播</span><span>{{ order.talentNickname ?? '—' }}</span>
+        </div>
         <div v-if="order.remark" class="row">
           <span>备注</span><span class="wrap">{{ order.remark }}</span>
         </div>
-        <div class="row"><span>订单号</span><span class="num">{{ order.orderRef }}</span></div>
         <div class="row">
-          <span>下单时间</span><span class="num">{{ formatTime(order.createdAt) }}</span>
+          <span>订单号</span><span class="num">{{ order.orderRef }}</span>
+        </div>
+        <div class="row">
+          <span>下单时间</span
+          ><span class="num">{{ formatTime(order.createdAt) }}</span>
         </div>
         <div v-if="order.paidAt" class="row">
-          <span>收款时间</span><span class="num">{{ formatTime(order.paidAt) }}</span>
+          <span>收款时间</span
+          ><span class="num">{{ formatTime(order.paidAt) }}</span>
         </div>
         <div v-if="order.acceptedAt" class="row">
-          <span>接单时间</span><span class="num">{{ formatTime(order.acceptedAt) }}</span>
+          <span>接单时间</span
+          ><span class="num">{{ formatTime(order.acceptedAt) }}</span>
         </div>
         <div v-if="order.completedAt" class="row">
-          <span>完成时间</span><span class="num">{{ formatTime(order.completedAt) }}</span>
+          <span>完成时间</span
+          ><span class="num">{{ formatTime(order.completedAt) }}</span>
         </div>
       </section>
 
@@ -184,12 +212,20 @@ function formatTime(value: string | null) {
         <h3>评价本次服务</h3>
         <template v-if="survey">
           <Rate :model-value="survey.score" readonly size="20" />
-          <p class="tip">已提交。评价不会公开展示，主播只能看到汇总后的平均分。</p>
+          <p class="tip">
+            已提交。评价不会公开展示，主播只能看到汇总后的平均分。
+          </p>
         </template>
         <template v-else>
           <Rate v-model="pendingScore" size="26" />
           <p class="tip">评价不会公开展示，主播只能看到汇总后的平均分。</p>
-          <Button type="primary" block round :loading="rating" @click="submitRating">
+          <Button
+            type="primary"
+            block
+            round
+            :loading="rating"
+            @click="submitRating"
+          >
             提交评价
           </Button>
         </template>
@@ -437,5 +473,92 @@ function formatTime(value: string | null) {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+}
+/* 订单页沿用竞品的青色状态头与票据式信息卡。 */
+.page {
+  background: #f5f7f8;
+}
+.hero,
+.hero.urge,
+.hero.live {
+  background: linear-gradient(125deg, #32d3c5, #0dbfb5);
+  color: white;
+  border-radius: 0 0 20px 20px;
+  margin: 0;
+  padding: 25px 22px 35px;
+}
+.hero .state,
+.hero .hint {
+  color: white;
+}
+.hero .hint {
+  opacity: 0.8;
+  font-size: 12px;
+}
+.hero.off {
+  background: #b7c9c7;
+}
+.hero .steps {
+  color: #fff9;
+}
+.hero .steps .on {
+  color: white;
+}
+.hero .steps .dot {
+  background: #ffffff66;
+}
+.hero .steps .done .dot,
+.hero .steps .on .dot {
+  background: #fff;
+}
+.money {
+  position: relative;
+  margin-top: -13px;
+  border-radius: 13px;
+  background: white;
+  box-shadow: none;
+}
+.order-person {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0 22px;
+  border: 0;
+  border-bottom: 1px dashed #e9eeee;
+  background: none;
+  width: 100%;
+  margin-bottom: 15px;
+}
+.order-person > span {
+  width: 54px;
+  height: 54px;
+}
+.order-person b {
+  font-size: 14px;
+  font-weight: 500;
+}
+.order-person small {
+  font-size: 10px;
+  color: #aaa;
+}
+.row {
+  font-size: 12px;
+}
+.info {
+  box-shadow: none;
+}
+.money .price {
+  color: #f4859a;
+}
+.actions {
+  margin: 20px 16px;
+}
+.info h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.state {
+  font-weight: 500;
 }
 </style>

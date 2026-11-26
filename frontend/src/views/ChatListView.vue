@@ -1,57 +1,54 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton } from 'vant'
-import { chatApi, type ChatConversationView } from '@/api/chat'
-import { useChatStore } from '@/stores/chat'
-import FanTabBar from '@/components/FanTabBar.vue'
-import EmptyState from '@/components/EmptyState.vue'
+import Portrait from '@/components/Portrait.vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { NavBar, Skeleton } from 'vant';
+import { chatApi, type ChatConversationView } from '@/api/chat';
+import { useChatStore } from '@/stores/chat';
+import FanTabBar from '@/components/FanTabBar.vue';
+import EmptyState from '@/components/EmptyState.vue';
 
-const router = useRouter()
-const chat = useChatStore()
+const router = useRouter();
+const chat = useChatStore();
 
-const items = ref<ChatConversationView[]>([])
-const loading = ref(true)
-const failed = ref(false)
+const items = ref<ChatConversationView[]>([]);
+const loading = ref(true);
+const failed = ref(false);
 
-onMounted(load)
+onMounted(load);
 
 async function load() {
   try {
-    items.value = await chatApi.conversations()
-    void chat.refresh()
+    items.value = await chatApi.conversations();
+    void chat.refresh();
   } catch {
-    failed.value = true
+    failed.value = true;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 function open(c: ChatConversationView) {
-  void router.push(`/me/chats/${c.id}`)
-}
-
-function initial(nickname: string | null) {
-  return (nickname ?? '').trim().charAt(0) || '·'
+  void router.push(`/me/chats/${c.id}`);
 }
 
 /** 列表时间只给到「哪天」或「几点」，精确到秒在这里没有意义。 */
 function timeText(iso: string) {
-  const at = new Date(iso)
-  const now = new Date()
-  const sameDay = at.toDateString() === now.toDateString()
+  const at = new Date(iso);
+  const now = new Date();
+  const sameDay = at.toDateString() === now.toDateString();
   if (sameDay) {
-    return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+    return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
   }
-  const yesterday = new Date(now.getTime() - 86400000)
-  if (at.toDateString() === yesterday.toDateString()) return '昨天'
-  return `${at.getMonth() + 1}/${at.getDate()}`
+  const yesterday = new Date(now.getTime() - 86400000);
+  if (at.toDateString() === yesterday.toDateString()) return '昨天';
+  return `${at.getMonth() + 1}/${at.getDate()}`;
 }
 </script>
 
 <template>
   <div class="page">
-    <NavBar title="消息" />
+    <NavBar title="在线聊天" />
 
     <Skeleton v-if="loading" :row="4" style="padding: 16px" />
     <EmptyState v-else-if="failed" image="network" description="加载失败" />
@@ -66,8 +63,7 @@ function timeText(iso: string) {
         @click="open(c)"
       >
         <div class="avatar">
-          <img v-if="c.coverUrl" :src="c.coverUrl" alt="" />
-          <span v-else class="fallback">{{ initial(c.nickname) }}</span>
+          <Portrait :src="c.coverUrl" :seed="c.talentId" round />
           <i v-if="c.unread > 0" class="unread" data-testid="row-unread">
             {{ c.unread > 99 ? '99+' : c.unread }}
           </i>
@@ -94,7 +90,9 @@ function timeText(iso: string) {
   min-height: 100vh;
   background: var(--g-page);
   background-attachment: fixed;
-  padding-bottom: 68px;
+  padding-bottom: calc(
+    var(--fan-tabbar-height) + 16px + env(safe-area-inset-bottom, 0px)
+  );
 }
 
 .list {
@@ -197,5 +195,23 @@ function timeText(iso: string) {
 
 .off {
   color: var(--c-text-3);
+}
+.page {
+  background: white;
+}
+.list {
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.row {
+  padding: 18px 20px;
+}
+.avatar {
+  width: 48px;
+  height: 48px;
+}
+.row + .row {
+  border-top: 1px solid #f7f7f7;
 }
 </style>

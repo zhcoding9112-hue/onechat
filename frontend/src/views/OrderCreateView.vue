@@ -1,64 +1,91 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { NavBar, Skeleton, Form, Field, CellGroup, Stepper, RadioGroup, Radio, SubmitBar, Popup, showToast } from 'vant'
-import { talentApi, type SpecOption, type TalentDetail } from '@/api/talent'
-import { orderApi } from '@/api/order'
-import { couponApi, type CouponItem } from '@/api/coupon'
-import { ApiError } from '@/api/http'
-import { centsToYuan, formatPrice } from '@/utils/money'
-import { durationHint } from '@/utils/serviceSpec'
-import { ENTRY_QUERY, entryFromRoute } from '@/api/analytics'
-import EmptyState from '@/components/EmptyState.vue'
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Skeleton, Stepper, Popup, showToast } from 'vant';
+import Portrait from '@/components/Portrait.vue';
+import { talentApi, type SpecOption, type TalentDetail } from '@/api/talent';
+import { orderApi } from '@/api/order';
+import { couponApi, type CouponItem } from '@/api/coupon';
+import { ApiError } from '@/api/http';
+import { centsToYuan, formatPrice } from '@/utils/money';
+import {
+  ENTRY_QUERY,
+  entryFromRoute,
+  type EntrySourceKey,
+} from '@/api/analytics';
+import EmptyState from '@/components/EmptyState.vue';
 
-const route = useRoute()
-const router = useRouter()
+const props = defineProps<{
+  embedded?: boolean;
+  presetSpec?: number | null;
+  talentId?: number;
+  entrySource?: EntrySourceKey;
+}>();
+const emit = defineEmits<{ close: [] }>();
+const route = useRoute();
+const router = useRouter();
 
-const talentId = computed(() => Number(route.params.id))
+const talentId = computed(() => props.talentId ?? Number(route.params.id));
 
 /** 入口来源：详情页用查询参数带过来；直接打开下单页的按直接访问记。 */
-const entrySource = entryFromRoute(route.query[ENTRY_QUERY])
-const detail = ref<TalentDetail | null>(null)
-const loading = ref(true)
-const submitting = ref(false)
+const entrySource =
+  props.entrySource ?? entryFromRoute(route.query[ENTRY_QUERY]);
+const detail = ref<TalentDetail | null>(null);
+const loading = ref(true);
+const submitting = ref(false);
 
-const selectedSpecId = ref<number | null>(null)
-const quantity = ref(1)
-const contact = ref('')
-const remark = ref('')
+const selectedSpecId = ref<number | null>(null);
+const quantity = ref(1);
+const contact = ref('');
+const remark = ref('');
+const contactType = ref('微信');
+const selectedGroup = computed(
+  () =>
+    detail.value?.services.find((g) =>
+      g.specs.some((s) => s.serviceSpecId === selectedSpecId.value),
+    ) ?? detail.value?.services[0],
+);
+function close() {
+  if (props.embedded) emit('close');
+  else router.back();
+}
+let couponRequest = 0;
 
 /** 把分组的档位摊平，下单时只需要选一个。 */
 const allSpecs = computed<SpecOption[]>(() =>
   (detail.value?.services ?? []).flatMap((group) => group.specs),
-)
+);
 
-const selectedSpec = computed(() =>
-  allSpecs.value.find((s) => s.serviceSpecId === selectedSpecId.value) ?? null,
-)
+const selectedSpec = computed(
+  () =>
+    allSpecs.value.find((s) => s.serviceSpecId === selectedSpecId.value) ??
+    null,
+);
 
 /** 原价：未用券前的金额。分成以它为基数，所以它也是券门槛的判定基数。 */
 const originalCents = computed(() =>
   selectedSpec.value ? selectedSpec.value.unitPriceCents * quantity.value : 0,
-)
+);
 
 /** 选中档位所属的服务项目，用于取限定品类的券。 */
 const selectedItemId = computed(() => {
   const group = (detail.value?.services ?? []).find((g) =>
     g.specs.some((s) => s.serviceSpecId === selectedSpecId.value),
-  )
-  return group?.serviceItemId ?? null
-})
+  );
+  return group?.serviceItemId ?? null;
+});
 
-const coupons = ref<CouponItem[]>([])
-const chosenCouponId = ref<number | null>(null)
-const couponSheetOpen = ref(false)
+const coupons = ref<CouponItem[]>([]);
+const chosenCouponId = ref<number | null>(null);
+const couponSheetOpen = ref(false);
 
 const chosenCoupon = computed(
-  () => coupons.value.find((c) => c.userCouponId === chosenCouponId.value) ?? null,
-)
+  () =>
+    coupons.value.find((c) => c.userCouponId === chosenCouponId.value) ?? null,
+);
 
-const discountCents = computed(() => chosenCoupon.value?.amountCents ?? 0)
-const payableCents = computed(() => originalCents.value - discountCents.value)
+const discountCents = computed(() => chosenCoupon.value?.amountCents ?? 0);
+const payableCents = computed(() => originalCents.value - discountCents.value);
 
 /**
  * 可用券由后端判定。
@@ -67,344 +94,450 @@ const payableCents = computed(() => originalCents.value - discountCents.value)
  * 而漂移的表现是「前端让你选，提交时被拒」。
  */
 async function reloadCoupons() {
+  const request = ++couponRequest;
   if (!originalCents.value) {
-    coupons.value = []
-    chosenCouponId.value = null
-    return
+    coupons.value = [];
+    chosenCouponId.value = null;
+    return;
   }
   try {
-    coupons.value = await couponApi.usable(originalCents.value, selectedItemId.value)
+    const result = await couponApi.usable(
+      originalCents.value,
+      selectedItemId.value,
+    );
+    if (request !== couponRequest) return;
+    coupons.value = result;
   } catch {
+    if (request !== couponRequest) return;
     // 券加载失败不该挡住下单，退化成「这单不用券」
-    coupons.value = []
+    coupons.value = [];
   }
   // 改了档位或数量后，原先选中的券可能已经不满足门槛
-  if (chosenCouponId.value && !coupons.value.some((c) => c.userCouponId === chosenCouponId.value)) {
-    chosenCouponId.value = null
+  if (
+    chosenCouponId.value &&
+    !coupons.value.some((c) => c.userCouponId === chosenCouponId.value)
+  ) {
+    chosenCouponId.value = null;
   }
 }
 
-watch([originalCents, selectedItemId], reloadCoupons)
+watch([originalCents, selectedItemId], reloadCoupons);
 
 onMounted(async () => {
   try {
-    detail.value = await talentApi.detail(talentId.value)
-    const preset = Number(route.query.specId)
-    const candidate = allSpecs.value.find((s) => s.serviceSpecId === preset)
-    selectedSpecId.value = candidate?.serviceSpecId ?? allSpecs.value[0]?.serviceSpecId ?? null
-    await reloadCoupons()
+    detail.value = await talentApi.detail(talentId.value);
+    const preset = props.presetSpec ?? Number(route.query.specId);
+    const candidate = allSpecs.value.find((s) => s.serviceSpecId === preset);
+    selectedSpecId.value =
+      candidate?.serviceSpecId ?? allSpecs.value[0]?.serviceSpecId ?? null;
+    await reloadCoupons();
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-})
+});
 
 async function submit() {
+  if (submitting.value) return;
   if (!selectedSpecId.value) {
-    showToast('请选择服务档位')
-    return
+    showToast('请选择服务档位');
+    return;
   }
   if (!contact.value.trim()) {
-    showToast('请填写微信号，主播需要据此联系你')
-    return
+    showToast(`请填写${contactType.value}号，主播需要据此联系你`);
+    return;
   }
 
-  submitting.value = true
+  submitting.value = true;
   try {
     const order = await orderApi.create({
       talentId: talentId.value,
       serviceSpecId: selectedSpecId.value,
       quantity: quantity.value,
-      contact: contact.value.trim(),
+      contact:
+        contactType.value === 'QQ'
+          ? `QQ：${contact.value.trim()}`
+          : contact.value.trim(),
       remark: remark.value.trim() || undefined,
       userCouponId: chosenCouponId.value,
       // 来源一路从详情页带到这里，在下单那一刻快照进订单
       entrySource,
-    })
+    });
     // 下单成功直接进入支付环节，少一次跳转
-    await router.replace(`/orders/${order.id}/payment`)
+    await router.replace(`/orders/${order.id}/payment`);
   } catch (e) {
     // 请求层已弹出提示，这里不重复提示
-    if (!(e instanceof ApiError)) showToast('下单失败，请稍后重试')
+    if (!(e instanceof ApiError)) showToast('下单失败，请稍后重试');
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 </script>
-
 <template>
-  <NavBar title="确认下单" left-arrow @click-left="$router.back()" />
-
-  <Skeleton v-if="loading" :row="5" style="padding: 16px" />
-  <EmptyState v-else-if="!detail" description="主播不存在" />
-  <EmptyState v-else-if="!detail.available" :description="detail.unavailableReason ?? '该主播暂不可约'" />
-
-  <template v-else>
-    <Form class="form">
-      <CellGroup inset title="选择服务">
-        <RadioGroup v-model="selectedSpecId">
-          <div
-            v-for="group in detail.services"
-            :key="group.serviceItemId"
-            class="group"
-          >
-            <p class="group-name">{{ group.name }}</p>
-            <!--
-              整行可点：Vant 的 Radio 不渲染原生 input，外层 label 不会把点击转给它，
-              结果是价格和两侧留白看着能点其实点不动。实测点 label 无效，点中间那个
-              小圆圈才行——在手机上这个命中区域太小了。
-            -->
-            <label
-              v-for="spec in group.specs"
-              :key="spec.serviceSpecId"
-              class="spec"
-              :class="{ active: spec.serviceSpecId === selectedSpecId }"
-              @click="selectedSpecId = spec.serviceSpecId"
-            >
-              <Radio :name="spec.serviceSpecId">
-                <span class="spec-name">{{ spec.name }}</span>
-                <span v-if="durationHint(spec)" class="spec-duration">
-                  {{ durationHint(spec) }}
-                </span>
-              </Radio>
-              <span class="spec-price">{{ formatPrice(spec.unitPriceCents) }}</span>
-            </label>
+  <div class="checkout-shell" :class="{ standalone: !embedded }">
+    <div class="checkout-panel">
+      <button class="sheet-close" aria-label="关闭下单" @click="close">×</button
+      ><Skeleton v-if="loading" :row="5" /><EmptyState
+        v-else-if="!detail"
+        description="主播资料加载失败"
+      /><EmptyState
+        v-else-if="!detail.available"
+        :description="detail.unavailableReason ?? '暂不可约'"
+      /><template v-else
+        ><header class="checkout-person">
+          <div>
+            <Portrait
+              :src="detail.coverUrl"
+              :seed="detail.id"
+              :name="detail.nickname"
+              round
+            />
           </div>
-        </RadioGroup>
-      </CellGroup>
-
-      <CellGroup inset title="数量">
-        <div class="stepper-row">
-          <span>购买数量</span>
-          <Stepper v-model="quantity" :min="1" :max="99" integer />
-        </div>
-      </CellGroup>
-
-      <CellGroup inset title="优惠券">
-        <div class="coupon-row" @click="couponSheetOpen = true">
-          <span>优惠券</span>
-          <span v-if="chosenCoupon" class="picked">
-            -{{ formatPrice(chosenCoupon.amountCents) }}
-          </span>
-          <span v-else-if="coupons.length" class="hint">{{ coupons.length }} 张可用</span>
-          <span v-else class="none">暂无可用</span>
-        </div>
-      </CellGroup>
-
-      <CellGroup inset title="联系方式">
-        <Field
-          v-model="contact"
-          label="微信号"
-          placeholder="请填写你的微信号"
-          maxlength="64"
-          required
-        />
-        <Field
-          v-model="remark"
-          label="备注"
-          type="textarea"
-          rows="2"
-          maxlength="255"
-          show-word-limit
-          placeholder="想聊的话题、希望的时间段等（选填）"
-        />
-      </CellGroup>
-
-      <p class="notice">
-        请填写正确的微信号。主播接单后会通过它联系你，服务在微信内进行。
-      </p>
-    </Form>
-
-    <!-- 单笔限一张，所以这里是单选而不是多选 -->
-    <Popup v-model:show="couponSheetOpen" position="bottom" round>
-      <div class="sheet">
+          <h2>{{ detail.nickname }}</h2>
+          <p>选择你的专属陪伴</p>
+        </header>
+        <form @submit.prevent="submit">
+          <section class="checkout-section">
+            <h3>服务类型</h3>
+            <div class="chips-row">
+              <button
+                v-for="g in detail.services"
+                :key="g.serviceItemId"
+                type="button"
+                class="choice-chip"
+                :class="{ selected: selectedItemId === g.serviceItemId }"
+                @click="selectedSpecId = g.specs[0]?.serviceSpecId ?? null"
+              >
+                {{ g.name }}
+              </button>
+            </div>
+          </section>
+          <section class="checkout-section">
+            <h3>服务时长</h3>
+            <div class="chips-row">
+              <button
+                v-for="s in selectedGroup?.specs"
+                :key="s.serviceSpecId"
+                type="button"
+                class="choice-chip"
+                :class="{ selected: selectedSpecId === s.serviceSpecId }"
+                @click="selectedSpecId = s.serviceSpecId"
+              >
+                {{ s.name }}
+              </button>
+            </div>
+          </section>
+          <section class="contact-box">
+            <div class="contact-types">
+              <label
+                ><input v-model="contactType" type="radio" value="微信" />
+                微信号</label
+              ><label
+                ><input v-model="contactType" type="radio" value="QQ" /> QQ
+                号</label
+              >
+            </div>
+            <input
+              v-model="contact"
+              :placeholder="`请输入您的${contactType}号`"
+              :aria-label="`${contactType}号`"
+              maxlength="60"
+            /><textarea
+              v-model="remark"
+              rows="1"
+              maxlength="255"
+              placeholder="备注：希望的时间、想聊的话题（选填）"
+              aria-label="订单备注"
+            />
+          </section>
+          <div class="checkout-row">
+            <span>购买数量</span
+            ><Stepper v-model="quantity" :min="1" :max="99" integer />
+          </div>
+          <button
+            type="button"
+            class="checkout-row coupon"
+            @click="couponSheetOpen = true"
+          >
+            <span>优惠券</span
+            ><span :class="{ discount: chosenCoupon }"
+              >{{
+                chosenCoupon
+                  ? '-' + formatPrice(discountCents)
+                  : coupons.length
+                    ? coupons.length + ' 张可用'
+                    : '暂无可用'
+              }}
+              ›</span
+            >
+          </button>
+          <div class="checkout-row">
+            <span>支付方式</span
+            ><span class="payment-method">▣ 人工收款 <i>✓</i></span>
+          </div>
+          <p class="checkout-note">
+            提交后按收款说明付款，客服确认到账后生效。
+          </p>
+          <footer class="checkout-footer">
+            <div>
+              <span>合计：</span><strong>{{ formatPrice(payableCents) }}</strong
+              ><small v-if="discountCents"
+                >原价 {{ formatPrice(originalCents) }}</small
+              >
+            </div>
+            <button
+              class="primary-btn"
+              :disabled="submitting || !selectedSpecId"
+              type="submit"
+            >
+              {{ submitting ? '提交中…' : '确认下单' }}
+            </button>
+          </footer>
+        </form></template
+      >
+    </div>
+    <Popup v-model:show="couponSheetOpen" position="bottom" round closeable
+      ><div class="coupon-sheet">
         <h3>选择优惠券</h3>
-        <p class="sheet-tip">单笔订单只能使用一张。门槛按订单原价判定。</p>
-
-        <button class="opt" :class="{ on: chosenCouponId === null }" @click="chosenCouponId = null; couponSheetOpen = false">
-          <span class="opt-name">不使用优惠券</span>
-        </button>
-
+        <p class="muted">单笔限用一张，按订单原价计算门槛</p>
         <button
+          :class="{ on: chosenCouponId === null }"
+          @click="
+            chosenCouponId = null;
+            couponSheetOpen = false;
+          "
+        >
+          不使用优惠券</button
+        ><button
           v-for="c in coupons"
           :key="c.userCouponId"
-          class="opt"
           :class="{ on: chosenCouponId === c.userCouponId }"
-          @click="chosenCouponId = c.userCouponId; couponSheetOpen = false"
+          @click="
+            chosenCouponId = c.userCouponId;
+            couponSheetOpen = false;
+          "
         >
-          <span class="opt-amount">-¥{{ centsToYuan(c.amountCents) }}</span>
-          <span class="opt-main">
-            <span class="opt-name">{{ c.name }}</span>
-            <span class="opt-sub">满 {{ centsToYuan(c.thresholdCents) }} 可用</span>
-          </span>
+          <strong>-¥{{ centsToYuan(c.amountCents) }}</strong
+          ><span
+            >{{ c.name
+            }}<small>满 {{ centsToYuan(c.thresholdCents) }} 元可用</small></span
+          >
         </button>
-
-        <p v-if="!coupons.length" class="sheet-empty">这笔订单暂时没有可用的券</p>
-      </div>
-    </Popup>
-
-    <SubmitBar
-      :price="payableCents"
-      :loading="submitting"
-      :disabled="!selectedSpecId"
-      button-text="提交订单"
-      @submit="submit"
+        <p v-if="!coupons.length" class="muted">这笔订单暂无可用优惠券</p>
+      </div></Popup
     >
-      <template #tip>
-        <span v-if="selectedSpec">
-          {{ selectedSpec.name }} × {{ quantity }}
-          <template v-if="discountCents">
-            ｜原价 {{ formatPrice(originalCents) }}，已减 {{ formatPrice(discountCents) }}
-          </template>
-        </span>
-        <span v-else>请先选择服务档位</span>
-      </template>
-    </SubmitBar>
-  </template>
+  </div>
 </template>
-
 <style scoped>
-.form {
-  padding-bottom: 72px;
+.checkout-shell {
+  background: linear-gradient(180deg, #fffdf1, white 35%);
+  border-radius: 22px 22px 0 0;
+  position: relative;
 }
-
-.coupon-row {
+.checkout-shell.standalone {
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  padding-top: 60px;
+  background: linear-gradient(#b0bac399, #a6bfc899), var(--g-page);
+}
+.standalone .checkout-panel {
+  width: 100%;
+  background: linear-gradient(#fffdf1, white 35%);
+  border-radius: 22px 22px 0 0;
+  position: relative;
+}
+.checkout-panel {
+  padding: 18px 20px calc(16px + env(safe-area-inset-bottom));
+  max-height: 90dvh;
+  overflow: auto;
+}
+.sheet-close {
+  position: absolute;
+  right: 15px;
+  top: 13px;
+  background: #eee9;
+  border: 0;
+  border-radius: 50%;
+  font-size: 22px;
+  color: #888;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  line-height: 26px;
+}
+.checkout-person {
+  text-align: center;
+  margin-bottom: 18px;
+}
+.checkout-person > div {
+  width: 54px;
+  height: 54px;
+  margin: auto;
+  box-shadow: 0 0 0 3px white;
+  border-radius: 50%;
+}
+.checkout-person h2 {
+  font-size: 15px;
+  margin: 8px 0 0;
+  font-weight: 500;
+}
+.checkout-person p {
+  font-size: 10px;
+  color: #aaa;
+  margin: 5px 0;
+}
+.checkout-section {
+  margin: 17px 0;
+}
+.checkout-section h3 {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0 0 10px;
+  color: #555;
+}
+.choice-chip {
+  font-size: 12px;
+  padding: 7px 12px;
+  min-width: 65px;
+}
+.contact-box {
+  border: 1px solid #e9eceb;
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 20px;
+}
+.contact-types {
+  display: flex;
+  gap: 26px;
+  font-size: 12px;
+  color: #666;
+}
+.contact-types input {
+  accent-color: var(--c-brand);
+  vertical-align: middle;
+}
+.contact-box > input,
+.contact-box > textarea {
+  background: none;
+  border: 0;
+  outline: none;
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  padding: 12px 0;
+  color: #555;
+}
+.contact-box > textarea {
+  border-top: 1px solid #f1f3f3;
+  resize: vertical;
+  padding-bottom: 0;
+  font-size: 11px;
+  min-height: 26px;
+}
+.checkout-row {
+  display: flex;
   justify-content: space-between;
-  padding: 12px 16px;
-  font-size: var(--fs-md);
-  cursor: pointer;
+  align-items: center;
+  padding: 17px 0;
+  border-bottom: 1px solid #f3f4f4;
+  font-size: 13px;
+  width: 100%;
 }
-
-.coupon-row .picked {
-  color: var(--c-price);
-  font-weight: 600;
+.coupon {
+  background: none;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  color: #555;
 }
-
-.coupon-row .hint {
-  color: var(--c-price);
+.coupon > span:last-child {
+  font-size: 12px;
+  color: #aaa;
 }
-
-.coupon-row .none {
-  color: var(--c-text-3);
+.coupon .discount {
+  color: #ff659c !important;
 }
-
-.sheet {
-  padding: 20px 16px 28px;
+.payment-method {
+  color: #666;
+  font-size: 12px;
 }
-
-.sheet h3 {
-  margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: 700;
+.payment-method i {
+  font-style: normal;
+  background: #10c6b6;
+  color: white;
+  border-radius: 50%;
+  margin-left: 10px;
+  padding: 1px 3px;
+}
+.checkout-note {
+  font-size: 10px;
+  color: #aaa;
   text-align: center;
+  margin: 15px 0;
 }
-
-.sheet-tip {
-  margin: 8px 0 16px;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
-  text-align: center;
-}
-
-.sheet-empty {
-  margin: 16px 0 0;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
-  text-align: center;
-}
-
-.opt {
+.checkout-footer {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  border: 1px solid var(--c-border);
-  background: var(--c-surface);
-  border-radius: var(--r-md);
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  text-align: left;
-  cursor: pointer;
+  padding-top: 5px;
 }
-
-.opt.on {
-  border-color: var(--c-brand);
-  background: var(--c-brand-soft);
+.checkout-footer > div > span {
+  font-size: 12px;
+  color: #666;
 }
-
-.opt-amount {
-  flex: none;
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  color: var(--c-price);
+.checkout-footer strong {
+  font-size: 21px;
+  color: #fa7187;
+  font-weight: 500;
 }
-
-.opt-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.checkout-footer small {
+  display: block;
+  font-size: 10px;
+  color: #aaa;
+  text-decoration: line-through;
+  margin-top: 3px;
 }
-
-.opt-name {
-  font-size: var(--fs-md);
+.checkout-footer .primary-btn {
+  min-width: 130px;
+  white-space: nowrap;
 }
-
-.opt-sub {
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
+.coupon-sheet {
+  padding: 25px 20px;
+  max-height: 70dvh;
+  overflow: auto;
+  text-align: center;
 }
-
-.group {
-  padding: 4px 0;
-}
-
-.group-name {
+.coupon-sheet h3 {
   margin: 0;
-  padding: 10px 16px 4px;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
 }
-
-.spec {
+.coupon-sheet > button {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--c-border);
+  gap: 16px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 9px;
+  width: 100%;
+  padding: 17px;
+  margin-top: 12px;
+  text-align: left;
 }
-
-.spec.active {
-  background: var(--c-brand-soft);
+.coupon-sheet > button.on {
+  background: #e7faf6;
+  border-color: #0dbfb5;
 }
-
-.spec-name {
-  font-size: var(--fs-md);
+.coupon-sheet strong {
+  font-size: 23px;
+  color: #f37f9b;
 }
-
-.spec-duration {
-  margin-left: 8px;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
+.coupon-sheet span {
+  font-size: 13px;
 }
-
-.spec-price {
-  color: var(--c-price);
-  font-weight: 600;
-}
-
-.stepper-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  font-size: var(--fs-md);
-}
-
-.notice {
-  margin: 12px 16px 0;
-  font-size: var(--fs-sm);
-  line-height: 1.7;
-  color: var(--c-text-3);
+.coupon-sheet small {
+  display: block;
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 5px;
 }
 </style>

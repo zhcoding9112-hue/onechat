@@ -1,50 +1,47 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton, showToast } from 'vant'
-import { talentApi, type FavoriteItem } from '@/api/talent'
-import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics'
-import EmptyState from '@/components/EmptyState.vue'
+import Portrait from '@/components/Portrait.vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { NavBar, Skeleton, showToast } from 'vant';
+import { talentApi, type FavoriteItem } from '@/api/talent';
+import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics';
+import EmptyState from '@/components/EmptyState.vue';
 
-const router = useRouter()
-const items = ref<FavoriteItem[]>([])
-const loading = ref(true)
-const failed = ref(false)
+const router = useRouter();
+const items = ref<FavoriteItem[]>([]);
+const loading = ref(true);
+const failed = ref(false);
 
-onMounted(reload)
+onMounted(reload);
 
 async function reload() {
-  loading.value = true
-  failed.value = false
+  loading.value = true;
+  failed.value = false;
   try {
-    items.value = await talentApi.myFavorites()
+    items.value = await talentApi.myFavorites();
   } catch {
-    failed.value = true
+    failed.value = true;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 function open(item: FavoriteItem) {
   // 已下架的仍可进详情看资料，只是详情页不给下单入口
-  router.push(talentPath(item.id, EntrySource.FAVORITES))
+  router.push(talentPath(item.id, EntrySource.FAVORITES));
 }
 
 async function remove(item: FavoriteItem, e: Event) {
-  e.stopPropagation()
-  await talentApi.unfavorite(item.id)
-  items.value = items.value.filter((i) => i.id !== item.id)
-  showToast('已取消收藏')
+  e.stopPropagation();
+  await talentApi.unfavorite(item.id);
+  items.value = items.value.filter((i) => i.id !== item.id);
+  showToast('已取消收藏');
 }
 
 function genderMark(g: FavoriteItem['gender']) {
-  if (g === 'FEMALE') return '♀'
-  if (g === 'MALE') return '♂'
-  return null
-}
-
-function initial(nickname: string) {
-  return nickname.trim().charAt(0) || '·'
+  if (g === 'FEMALE') return '♀';
+  if (g === 'MALE') return '♂';
+  return null;
 }
 </script>
 
@@ -62,16 +59,25 @@ function initial(nickname: string) {
     </div>
 
     <div v-else class="list">
-      <article v-for="item in items" :key="item.id" class="card" @click="open(item)">
+      <article
+        v-for="item in items"
+        :key="item.id"
+        class="card"
+        @click="open(item)"
+      >
         <div class="cover" :class="{ dim: !item.available }">
-          <img v-if="item.coverUrl" :src="item.coverUrl" alt="" />
-          <span v-else class="fallback">{{ initial(item.nickname) }}</span>
+          <Portrait :src="item.coverUrl" :seed="item.id" round />
         </div>
         <div class="info">
           <div class="row">
             <span class="name">{{ item.nickname }}</span>
-            <span v-if="genderMark(item.gender)" class="gender" :class="item.gender?.toLowerCase()">
-              {{ genderMark(item.gender) }}<i v-if="item.age" class="num">{{ item.age }}</i>
+            <span
+              v-if="genderMark(item.gender)"
+              class="gender"
+              :class="item.gender?.toLowerCase()"
+            >
+              {{ genderMark(item.gender)
+              }}<i v-if="item.age" class="num">{{ item.age }}</i>
             </span>
             <span v-if="item.region" class="region">· {{ item.region }}</span>
           </div>
@@ -85,7 +91,15 @@ function initial(nickname: string) {
         </div>
         <div class="ops">
           <button class="unfav" @click="remove(item, $event)">取消收藏</button>
-          <button v-if="item.available" class="order" @click.stop="router.push(`/talents/${item.id}/order?${ENTRY_QUERY}=${EntrySource.FAVORITES}`)">
+          <button
+            v-if="item.available"
+            class="order"
+            @click.stop="
+              router.push(
+                `/talents/${item.id}/order?${ENTRY_QUERY}=${EntrySource.FAVORITES}`,
+              )
+            "
+          >
             下单
           </button>
         </div>

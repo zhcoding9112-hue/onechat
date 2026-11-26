@@ -1,69 +1,138 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import LevelBadge from '@/components/LevelBadge.vue'
-import { useRoute, useRouter } from 'vue-router'
-import { NavBar, Skeleton, showToast, showImagePreview } from 'vant'
-import { feedApi, type FeedCommentView, type FeedPostView } from '@/api/feed'
-import { ApiError } from '@/api/http'
-import { EntrySource, talentPath } from '@/api/analytics'
-import EmptyState from '@/components/EmptyState.vue'
+import { onMounted, ref } from 'vue';
+import Portrait from '@/components/Portrait.vue';
+import { talentApi } from '@/api/talent';
+import LevelBadge from '@/components/LevelBadge.vue';
+import { useRoute, useRouter } from 'vue-router';
+import {
+  NavBar,
+  Skeleton,
+  showToast,
+  showImagePreview,
+  showDialog,
+} from 'vant';
+import { feedApi, type FeedCommentView } from '@/api/feed';
+import { ApiError } from '@/api/http';
+import { EntrySource, talentPath } from '@/api/analytics';
+import EmptyState from '@/components/EmptyState.vue';
+import DemoFeedGallery from '@/components/DemoFeedGallery.vue';
+import { previewTalents } from '@/preview/marketplace';
+import {
+  getPreviewPost,
+  previewFeedComments,
+  previewFeedFollowing,
+  togglePreviewFollow,
+  addPreviewComment,
+  type DisplayFeedPost,
+} from '@/preview/feed';
 
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 
-const postId = Number(route.params.id)
-const post = ref<FeedPostView | null>(null)
-const comments = ref<FeedCommentView[]>([])
-const loading = ref(true)
-const draft = ref('')
-const sending = ref(false)
+const postId = Number(route.params.id);
+const post = ref<DisplayFeedPost | null>(null);
+const comments = ref<FeedCommentView[]>([]);
+const loading = ref(true);
+const draft = ref('');
+const sending = ref(false);
+const favorited = ref(false);
+const favoriting = ref(false);
+async function toggleFavorite() {
+  if (!post.value || favoriting.value) return;
+  if (post.value.demo) {
+    togglePreviewFollow(post.value.talentId);
+    favorited.value = previewFeedFollowing.value.includes(post.value.talentId);
+    return;
+  }
+  favoriting.value = true;
+  try {
+    if (favorited.value) await talentApi.unfavorite(post.value.talentId);
+    else await talentApi.favorite(post.value.talentId);
+    favorited.value = !favorited.value;
+  } finally {
+    favoriting.value = false;
+  }
+}
 
-onMounted(reload)
+onMounted(reload);
 
 async function reload() {
-  loading.value = true
+  loading.value = true;
+  if (postId < 0) {
+    post.value = getPreviewPost(postId) ?? null;
+    comments.value = previewFeedComments[postId] ?? [];
+    favorited.value =
+      !!post.value && previewFeedFollowing.value.includes(post.value.talentId);
+    loading.value = false;
+    return;
+  }
   try {
-    const page = await feedApi.square(0, 50)
-    post.value = page.items.find((p) => p.id === postId) ?? null
-    comments.value = await feedApi.comments(postId)
+    post.value = await feedApi.detail(postId);
+    void talentApi
+      .myFavorites()
+      .then(
+        (items) =>
+          (favorited.value = items.some((t) => t.id === post.value?.talentId)),
+      )
+      .catch(() => {});
+    comments.value = await feedApi.comments(postId);
   } catch {
-    post.value = null
+    post.value = null;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function send() {
-  const text = draft.value.trim()
+  if (sending.value) return;
+  const text = draft.value.trim();
   if (!text) {
-    showToast('说点什么吧')
-    return
+    showToast('说点什么吧');
+    return;
   }
-  sending.value = true
+  if (post.value?.demo) {
+    addPreviewComment(postId, text);
+    comments.value = previewFeedComments[postId] ?? [];
+    draft.value = '';
+    return;
+  }
+  sending.value = true;
   try {
-    const created = await feedApi.comment(postId, text)
-    comments.value = comments.value.concat(created)
-    draft.value = ''
-    if (post.value) post.value.commentCount += 1
+    const created = await feedApi.comment(postId, text);
+    comments.value = comments.value.concat(created);
+    draft.value = '';
+    if (post.value) post.value.commentCount += 1;
   } catch (e) {
-    if (!(e instanceof ApiError)) throw e
+    if (!(e instanceof ApiError)) throw e;
   } finally {
-    sending.value = false
+    sending.value = false;
   }
+}
+
+function openAuthor() {
+  if (!post.value) return;
+  if (post.value.demo) {
+    const talent = previewTalents.find((t) => t.id === post.value?.talentId);
+    void showDialog({
+      title: `${post.value.nickname} · 模拟主播`,
+      message: `${talent?.region ?? ''} · ${talent?.age ?? ''} 岁\n${talent?.tags.join(' · ') ?? ''}\n仅供浏览展示，不提供真实服务。`,
+    });
+    return;
+  }
+  void router.push(talentPath(post.value.talentId, EntrySource.FEED));
 }
 
 function preview(images: string[], index: number) {
-  showImagePreview({ images, startPosition: index })
-}
-
-function initial(nickname: string | null) {
-  return (nickname ?? '').trim().charAt(0) || '·'
+  showImagePreview({ images, startPosition: index });
 }
 
 function timeText(iso: string) {
   return new Date(iso).toLocaleString('zh-CN', {
-    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  })
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 </script>
 
@@ -75,16 +144,26 @@ function timeText(iso: string) {
     <EmptyState v-else-if="!post" description="动态不存在或已下架" />
 
     <template v-else>
+      <p v-if="post.demo" class="demo-notice">
+        模拟动态 · 点赞、关注和评论仅保存在当前页面会话
+      </p>
       <article class="post">
-        <header class="head" @click="router.push(talentPath(post.talentId, EntrySource.FEED))">
+        <header class="head" @click="openAuthor">
           <div class="avatar">
-            <img v-if="post.coverUrl" :src="post.coverUrl" alt="" />
-            <span v-else class="fallback">{{ initial(post.nickname) }}</span>
+            <Portrait :src="post.coverUrl" :seed="post.talentId" round />
           </div>
           <div class="who">
             <span class="name">{{ post.nickname ?? '主播' }}</span>
             <span class="time">{{ timeText(post.createdAt) }}</span>
           </div>
+          <button
+            class="detail-follow"
+            :class="{ on: favorited }"
+            :disabled="favoriting"
+            @click.stop="toggleFavorite"
+          >
+            {{ favorited ? '★' : '☆' }}
+          </button>
         </header>
 
         <p v-if="post.content" class="content">{{ post.content }}</p>
@@ -98,6 +177,10 @@ function timeText(iso: string) {
             @click="preview(post.images, i)"
           />
         </div>
+        <DemoFeedGallery
+          v-if="post.demoTiles?.length"
+          :tiles="post.demoTiles"
+        />
       </article>
 
       <h3 class="sec-title">评论（{{ comments.length }}）</h3>
@@ -109,7 +192,11 @@ function timeText(iso: string) {
             <div class="c-head">
               <span class="c-name">{{ c.nickname }}</span>
               <span v-if="c.author" class="c-author">作者</span>
-              <LevelBadge v-else-if="c.level" :level="c.level" :name="c.levelName ?? ''" />
+              <LevelBadge
+                v-else-if="c.level"
+                :level="c.level"
+                :name="c.levelName ?? ''"
+              />
               <span class="c-time">{{ timeText(c.createdAt) }}</span>
             </div>
             <p class="c-text">{{ c.content }}</p>
@@ -118,14 +205,28 @@ function timeText(iso: string) {
       </div>
 
       <div class="composer">
-        <input v-model="draft" maxlength="500" placeholder="说点什么…" @keyup.enter="send" />
-        <button :disabled="sending" @click="send">{{ sending ? '发送中' : '发送' }}</button>
+        <input
+          v-model="draft"
+          maxlength="500"
+          :placeholder="post.demo ? '写一条模拟评论…' : '说点什么…'"
+          @keyup.enter="send"
+        />
+        <button :disabled="sending" @click="send">
+          {{ post.demo ? '模拟发送' : sending ? '发送中' : '发送' }}
+        </button>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
+.demo-notice {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 11px;
+  color: #a18ca9;
+  background: #faf6fc;
+}
 .page {
   min-height: 100vh;
   background: var(--g-page);
@@ -323,5 +424,45 @@ function timeText(iso: string) {
   font-size: var(--fs-md);
   font-weight: 600;
   cursor: pointer;
+}
+.page {
+  background: white;
+}
+.post {
+  box-shadow: none;
+  margin: 0;
+  border-radius: 0;
+  padding: 20px;
+}
+.images img {
+  border-radius: 7px;
+}
+.detail-follow {
+  border: 0;
+  background: none;
+  margin-left: auto;
+  font-size: 23px;
+  color: #bbb;
+}
+.detail-follow.on {
+  color: #f5c862;
+}
+.composer {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(100%, var(--app-max-width));
+}
+.composer input {
+  border-radius: 22px;
+  background: #f5f5f5;
+  border: 0;
+}
+.composer button {
+  border-radius: 20px;
+  background: #a976df;
+}
+.sec-title {
+  font-size: 14px;
 }
 </style>

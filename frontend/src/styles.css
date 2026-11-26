@@ -13,8 +13,8 @@
    * 这里先给出等价的静态值作为兜底：老版本微信 WebView 不支持 color-mix，
    * 没有兜底会让这两个变量直接失效、相关元素变透明。
    */
-  --c-brand: #4ecdc4; /* 主色：青绿。试听角标、在线态、主按钮 */
-  --c-brand-deep: #2fa89f; /* 主色加深：按下态、主色文字 */
+  --c-brand: #0dbfb5; /* 主色：青绿。试听角标、在线态、主按钮 */
+  --c-brand-deep: #08a89f; /* 主色加深：按下态、主色文字 */
   --c-brand-soft: #e6f8f6; /* 主色浅底：选中行、弱强调块 */
 
   /* ---------- 运营位渐变 ---------- */
@@ -25,7 +25,8 @@
   --g-op-warm: linear-gradient(135deg, var(--c-op-peach), var(--c-op-pink));
   --g-op-cool: linear-gradient(135deg, var(--c-op-sky), #cdf4ef);
   --g-op-violet: linear-gradient(135deg, var(--c-op-lilac), #f0e6ff);
-  --g-page: linear-gradient(180deg, #e8f7fb 0%, #f2f1fb 42%, var(--c-bg) 100%);
+  --g-page: radial-gradient(ellipse at 0 0, #d9f8e8, transparent 65%),
+    linear-gradient(180deg, #d8f2fa 0%, #f5f6f8 500px);
 
   /* ---------- 中性色 ---------- */
   --c-bg: #f5f6f8;
@@ -78,9 +79,10 @@
 
   /* ---------- 布局 ---------- */
   --app-max-width: 750px;
+  --fan-tabbar-height: 60px;
 
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial,
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'Helvetica Neue', Arial, sans-serif;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -167,4 +169,118 @@ html[data-app='admin'] #app {
     --c-brand-deep: color-mix(in srgb, var(--c-brand) 78%, #000);
     --c-brand-soft: color-mix(in srgb, var(--c-brand) 14%, #fff);
   }
+}
+
+/* 移动页面与弹层共用版心，桌面预览不拉伸固定底栏。 */
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--c-brand);
+  outline-offset: 3px;
+}
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+input {
+  min-width: 0;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+html:not([data-app='admin']) .van-popup--bottom,
+html:not([data-app='admin']) .van-submit-bar,
+html:not([data-app='admin']) .van-action-bar {
+  max-width: var(--app-max-width);
+  left: 50%;
+  right: auto;
+  width: 100%;
+  transform: translateX(-50%);
+}
+.replica-page {
+  min-height: 100dvh;
+  padding: 0 15px 84px;
+  background: var(--g-page);
+}
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0;
+  padding: 20px 0;
+}
+.soft-card {
+  background: white;
+  border-radius: 14px;
+  padding: 18px;
+  margin: 12px 0;
+}
+.section-heading {
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 18px 0 12px;
+}
+.muted {
+  color: var(--c-text-3);
+  font-size: 12px;
+}
+.primary-btn {
+  border: 0;
+  background: var(--c-brand);
+  color: white;
+  border-radius: 8px;
+  padding: 13px 20px;
+}
+.chips-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.choice-chip {
+  border: 1px solid #e8eaed;
+  background: #f5f6f8;
+  color: #777;
+  padding: 8px 14px;
+  border-radius: 7px;
+}
+.choice-chip.selected {
+  color: #05afa4;
+  background: #e4fcf6;
+  border-color: #09c8bc;
+}
+.fixed-action {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, var(--app-max-width));
+  padding: 10px 15px calc(10px + env(safe-area-inset-bottom));
+  background: white;
+  z-index: 25;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.fixed-action .primary-btn {
+  flex: 1;
+}
+.van-nav-bar__title {
+  font-weight: 500 !important;
+}
+.van-nav-bar__arrow {
+  color: #444 !important;
 }

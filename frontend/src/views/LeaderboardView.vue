@@ -1,57 +1,69 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton } from 'vant'
-import { leaderboardApi, type BoardRow, type PeriodType } from '@/api/leaderboard'
-import { centsToYuan } from '@/utils/money'
-import { EntrySource, talentPath } from '@/api/analytics'
-import EmptyState from '@/components/EmptyState.vue'
+import { onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { NavBar, Skeleton } from 'vant';
+import {
+  leaderboardApi,
+  type BoardRow,
+  type PeriodType,
+} from '@/api/leaderboard';
+import { centsToYuan } from '@/utils/money';
+import { EntrySource, talentPath } from '@/api/analytics';
+import WingFrame from '@/components/WingFrame.vue';
+import Portrait from '@/components/Portrait.vue';
+import GiftArt from '@/components/GiftArt.vue';
+import EmptyState from '@/components/EmptyState.vue';
 
-const router = useRouter()
+const router = useRouter();
 
-const type = ref<PeriodType>('DAY')
-const rows = ref<BoardRow[]>([])
-const loading = ref(true)
-const failed = ref(false)
+const type = ref<PeriodType>('DAY');
+const rows = ref<BoardRow[]>([]);
+const loading = ref(true);
+const failed = ref(false);
+let requestId = 0;
 
 const TABS: { key: PeriodType; label: string }[] = [
   { key: 'DAY', label: '日榜' },
   { key: 'WEEK', label: '周榜' },
   { key: 'MONTH', label: '月榜' },
-]
+];
 
-onMounted(load)
-watch(type, load)
+onMounted(load);
+watch(type, load);
 
 async function load() {
-  loading.value = true
-  failed.value = false
+  const current = ++requestId;
+  loading.value = true;
+  failed.value = false;
   try {
-    rows.value = (await leaderboardApi.board(type.value)).rows
+    const result = await leaderboardApi.board(type.value);
+    if (current !== requestId) return;
+    rows.value = result.rows;
   } catch {
-    failed.value = true
-    rows.value = []
+    if (current !== requestId) return;
+    failed.value = true;
+    rows.value = [];
   } finally {
-    loading.value = false
+    if (current === requestId) loading.value = false;
   }
-}
-
-function initial(nickname: string) {
-  return nickname.trim().charAt(0) || '·'
 }
 
 /** 领奖台的站位：第二名在左、第一名居中、第三名在右。 */
 function podium() {
-  const [first, second, third] = rows.value
-  return [second, first, third].filter(Boolean) as BoardRow[]
+  const [first, second, third] = rows.value;
+  return [second, first, third].filter(Boolean) as BoardRow[];
 }
 </script>
-
 <template>
-  <div class="page">
-    <NavBar title="打赏榜" left-arrow @click-left="$router.back()" />
-
-    <div class="tabs">
+  <div class="rank-page">
+    <NavBar title="排行榜" left-arrow @click-left="router.back()" />
+    <div class="rank-hero">
+      <span class="rank-star s1">✦</span><span class="rank-star s2">✦</span
+      ><GiftArt kind="trophy" :size="58" />
+      <h1>心动人气榜</h1>
+      <p>每一份心意，都闪闪发光</p>
+    </div>
+    <nav class="rank-tabs">
       <button
         v-for="t in TABS"
         :key="t.key"
@@ -60,258 +72,294 @@ function podium() {
       >
         {{ t.label }}
       </button>
-    </div>
-
-    <Skeleton v-if="loading" :row="4" style="padding: 16px" />
-    <EmptyState v-else-if="failed" image="network" description="加载失败" />
-    <EmptyState v-else-if="rows.length === 0" description="这个周期还没有打赏" />
-
-    <template v-else>
-      <!-- 前三名与其余名次同处一张卡：分成两块白底会在中间裂出一道缝 -->
-      <section class="board">
-        <div class="podium">
-          <div
-            v-for="r in podium()"
-            :key="r.talentId"
-            class="stand"
-            :class="`r${r.rank}`"
-            @click="router.push(talentPath(r.talentId, EntrySource.LEADERBOARD))"
-          >
-            <div class="avatar">
-              <img v-if="r.coverUrl" :src="r.coverUrl" alt="" />
-              <span v-else class="fallback">{{ initial(r.nickname) }}</span>
-              <span class="crown">{{ r.rank }}</span>
-            </div>
-            <span class="name">{{ r.nickname }}</span>
-            <span class="amount">¥{{ centsToYuan(r.amountCents) }}</span>
+    </nav>
+    <Skeleton v-if="loading" :row="5" /><EmptyState
+      v-else-if="failed"
+      description="榜单加载失败"
+    /><EmptyState
+      v-else-if="!rows.length"
+      description="本期暂无已确认打赏"
+    /><template v-else
+      ><section class="podium">
+        <button
+          v-for="r in podium()"
+          :key="r.talentId"
+          class="stand"
+          :class="'rank-' + r.rank"
+          @click="router.push(talentPath(r.talentId, EntrySource.LEADERBOARD))"
+        >
+          <WingFrame
+            :src="r.coverUrl"
+            :seed="r.talentId"
+            :name="r.nickname"
+            :size="r.rank === 1 ? 74 : 58"
+            :tone="r.rank === 1 ? 'gold' : r.rank === 2 ? 'pink' : 'blue'"
+          /><span class="rank-name">{{ r.nickname }}</span
+          ><span class="rank-amount">{{ centsToYuan(r.amountCents) }} 元</span>
+          <div class="pedestal">
+            <span>NO.{{ r.rank }}</span
+            ><b>{{ r.rank }}</b
+            ><i>✦</i>
           </div>
-        </div>
-
-        <div v-if="rows.length > 3" class="list">
-          <article
-            v-for="r in rows.slice(3)"
-            :key="r.talentId"
-            class="row"
-            @click="router.push(talentPath(r.talentId, EntrySource.LEADERBOARD))"
-          >
-            <span class="rank">{{ r.rank }}</span>
-            <div class="avatar sm">
-              <img v-if="r.coverUrl" :src="r.coverUrl" alt="" />
-              <span v-else class="fallback">{{ initial(r.nickname) }}</span>
-            </div>
-            <span class="row-name">{{ r.nickname }}</span>
-            <span class="row-amount">¥{{ centsToYuan(r.amountCents) }}</span>
-          </article>
-        </div>
+        </button>
       </section>
-
-      <!--
-        榜单只呈现主播。打赏人的昵称、头像与任何标识都不在这里出现，
-        接口返回体里也没有对应字段。
-      -->
-      <p class="note">按已确认收款的打赏金额统计，退款的打赏不计入。</p>
-    </template>
+      <section class="ranking-list">
+        <article v-for="r in rows.slice(3)" :key="r.talentId">
+          <button
+            class="person"
+            @click="
+              router.push(talentPath(r.talentId, EntrySource.LEADERBOARD))
+            "
+          >
+            <span class="number">{{ r.rank }}</span
+            ><span class="photo"
+              ><Portrait :src="r.coverUrl" :seed="r.talentId" round
+            /></span>
+            <div>
+              <b>{{ r.nickname }}</b
+              ><small>心动值 {{ centsToYuan(r.amountCents) }}</small>
+            </div></button
+          ><button
+            class="support"
+            @click="router.push(`/talents/${r.talentId}/tip`)"
+          >
+            助力上榜
+          </button>
+        </article>
+        <p v-if="rows.length <= 3" class="rank-note">
+          每一份陪伴，都值得被看见
+        </p>
+      </section></template
+    >
+    <p class="rank-note">仅统计已确认的打赏，退款不计入榜单</p>
   </div>
 </template>
-
 <style scoped>
-.page {
-  min-height: 100vh;
-  background: var(--g-page);
-  background-attachment: fixed;
-  padding-bottom: var(--sp-8);
-}
-
-.tabs {
-  display: flex;
-  gap: var(--sp-5);
-  padding: var(--sp-2) var(--sp-4) var(--sp-4);
-}
-
-.tabs button {
-  border: none;
-  background: none;
-  padding: var(--sp-2) 0;
-  font-size: var(--fs-lg);
-  color: var(--c-text-2);
-  cursor: pointer;
-}
-
-.tabs button.on {
-  color: var(--c-text);
-  font-weight: 700;
-  font-size: var(--fs-xl);
-}
-
-/* ---------- 领奖台 ---------- */
-.board {
-  margin: 0 var(--sp-4);
-  background: var(--c-surface);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sd-card);
+.rank-page {
+  min-height: 100dvh;
   overflow: hidden;
+  padding-bottom: 32px;
+  background: radial-gradient(
+    ellipse at 50% 25%,
+    #fffef1 0,
+    #fff2bd 34%,
+    #ffe7b4 60%,
+    #fff9e9
+  );
 }
-
+.rank-hero {
+  position: relative;
+  text-align: center;
+  padding: 5px 0 20px;
+  color: #ac782f;
+}
+.rank-hero .gift-art {
+  vertical-align: middle;
+}
+.rank-hero h1 {
+  font-size: 27px;
+  display: inline-block;
+  margin: 0 0 0 6px;
+  font-weight: 800;
+  text-shadow: 0 2px white;
+  vertical-align: middle;
+}
+.rank-hero p {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #c49b58;
+  margin: 4px 0 0;
+}
+.rank-star {
+  position: absolute;
+  font-size: 27px;
+  color: #edc978;
+}
+.s1 {
+  top: 0;
+  left: 9%;
+  transform: rotate(-20deg);
+}
+.s2 {
+  right: 8%;
+  bottom: 9px;
+  font-size: 20px;
+}
+.rank-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 55px;
+  margin: 5px 0 40px;
+}
+.rank-tabs button {
+  background: none;
+  border: 0;
+  font-size: 17px;
+  color: #c6a365;
+  padding: 8px 0;
+  position: relative;
+}
+.rank-tabs button.on {
+  color: #916624;
+  font-weight: 700;
+}
+.rank-tabs button.on:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 4px;
+  background: #cfa554;
+  border-radius: 50%;
+}
 .podium {
   display: flex;
   align-items: flex-end;
-  justify-content: center;
-  gap: var(--sp-2);
-  padding: var(--sp-5) var(--sp-3) var(--sp-4);
+  padding: 0 25px;
+  gap: 0;
+  min-height: 290px;
 }
-
-/*
-  名次差靠「头像大小 + 整列下沉」表达，不画假台阶。
-  之前用白色方块当台阶，在白底卡片上既看不出是台阶，又会和下方列表撞在一起。
-*/
 .stand {
+  border: 0;
+  background: none;
   flex: 1;
   min-width: 0;
   display: flex;
+  align-items: center;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-}
-
-.stand.r2,
-.stand.r3 {
-  padding-bottom: var(--sp-2);
-}
-
-.avatar {
+  padding: 0;
   position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  overflow: visible;
-  background: var(--g-avatar);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
-
-.r1 .avatar {
-  width: 72px;
-  height: 72px;
+.rank-1 {
+  z-index: 2;
 }
-
-.avatar.sm {
-  width: 40px;
-  height: 40px;
-  flex: none;
+.rank-2 {
+  order: -1;
 }
-
-.avatar img {
+.rank-3 {
+  order: 3;
+}
+.rank-name {
+  font-size: 13px;
+  margin-top: 15px;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #70573f;
+}
+.rank-amount {
+  font-size: 10px;
+  color: #ab8666;
+  margin: 7px 0 14px;
+}
+.pedestal {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
-.crown {
-  position: absolute;
-  top: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  line-height: 20px;
-  border-radius: var(--r-pill);
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  color: #fff;
-  text-align: center;
-  background: var(--c-text-3);
-  box-shadow: 0 0 0 2px var(--c-surface);
-}
-
-.r1 .crown {
-  background: #d9a441;
-}
-
-.r2 .crown {
-  background: #a9b4bd;
-}
-
-.r3 .crown {
-  background: #c08457;
-}
-
-.fallback {
-  font-size: var(--fs-lg);
-  font-weight: 300;
-  color: #fff;
-}
-
-.name {
-  margin-top: 2px;
-  font-size: var(--fs-md);
-  font-weight: 600;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.r1 .name {
-  font-size: var(--fs-lg);
-}
-
-.amount {
-  font-size: var(--fs-sm);
-  color: var(--c-price);
-  font-weight: 600;
-}
-
-/* ---------- 第四名起 ---------- */
-.list {
-  border-top: 1px solid var(--c-border);
-}
-
-.row {
+  background: linear-gradient(125deg, #e7d4ff, #c5a9f5);
+  border-radius: 9px 9px 0 0;
+  border-top: 5px solid #f9eeff;
+  height: 106px;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--c-border);
-  cursor: pointer;
+  flex-direction: column;
+  box-shadow: inset -7px 0 0 #ae8fd32b;
+  color: white;
 }
-
-.row:last-child {
-  border-bottom: none;
+.rank-1 .pedestal {
+  height: 142px;
+  background: linear-gradient(125deg, #ffd1e5, #f1a8cc);
+  border-color: #fff0f7;
 }
-
-.rank {
-  flex: none;
-  width: 24px;
-  text-align: center;
-  font-size: var(--fs-md);
-  color: var(--c-text-3);
+.rank-3 .pedestal {
+  height: 88px;
+  background: linear-gradient(125deg, #d7e7ff, #9dbeed);
+  border-color: #f0f7ff;
 }
-
-.row-name {
+.pedestal span {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #fff;
+  padding-top: 10px;
+}
+.pedestal b {
+  font-size: 44px;
+  font-family: Georgia, serif;
+  font-weight: 500;
+  text-shadow: 0 2px 0 #bc8fb355;
+  line-height: 1.3;
+}
+.pedestal i {
+  font-size: 14px;
+  font-style: normal;
+}
+.ranking-list {
+  position: relative;
+  z-index: 3;
+  margin: 0 15px;
+  border-radius: 14px;
+  background: linear-gradient(#fffffff5, #fffdf5);
+  padding: 9px 13px;
+}
+.ranking-list article {
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid #f6f0e6;
+  gap: 8px;
+}
+.person {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  background: none;
   flex: 1;
+  text-align: left;
+  padding: 0;
   min-width: 0;
-  font-size: var(--fs-lg);
-  overflow: hidden;
+}
+.number {
+  color: #a3a1a0;
+  font-size: 16px;
+  width: 16px;
+}
+.photo {
+  width: 42px;
+  height: 42px;
+  flex: none;
+}
+.person div {
+  min-width: 0;
+}
+.person b {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
   text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 150px;
+}
+.person small {
+  display: block;
+  color: #c5a06e;
+  font-size: 10px;
+  margin-top: 7px;
+}
+.support {
+  border: 0;
+  background: linear-gradient(120deg, #fff2cb, #ffdfa8);
+  color: #b49059;
+  border-radius: 16px;
+  font-size: 10px;
+  padding: 7px 9px;
   white-space: nowrap;
 }
-
-.row-amount {
-  flex: none;
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--c-price);
-}
-
-.note {
-  margin: var(--sp-4) var(--sp-4) 0;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
+.rank-note {
   text-align: center;
-  line-height: 1.6;
+  font-size: 10px;
+  color: #c4ad87;
+  margin: 20px 14px;
 }
 </style>

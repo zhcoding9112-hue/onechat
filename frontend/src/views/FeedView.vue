@@ -1,417 +1,445 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton, Loading, showToast, showConfirmDialog, showImagePreview } from 'vant'
-import { feedApi, type CrushWallItem, type FeedPostView } from '@/api/feed'
-import FanTabBar from '@/components/FanTabBar.vue'
-import { ApiError } from '@/api/http'
-import { EntrySource, talentPath, trackEntry } from '@/api/analytics'
-import EmptyState from '@/components/EmptyState.vue'
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import {
+  Skeleton,
+  Loading,
+  showToast,
+  showDialog,
+  showConfirmDialog,
+  showImagePreview,
+} from 'vant';
+import { feedApi, type FeedPostView } from '@/api/feed';
+import FanTabBar from '@/components/FanTabBar.vue';
+import { ApiError } from '@/api/http';
+import { EntrySource, talentPath } from '@/api/analytics';
+import Portrait from '@/components/Portrait.vue';
+import { talentApi } from '@/api/talent';
+import EmptyState from '@/components/EmptyState.vue';
+import DemoFeedGallery from '@/components/DemoFeedGallery.vue';
+import { previewTalents } from '@/preview/marketplace';
+import {
+  previewFeedPosts,
+  previewFeedFollowing,
+  togglePreviewFollow,
+  togglePreviewLike,
+  getPreviewPost,
+  type DisplayFeedPost,
+} from '@/preview/feed';
 
-const router = useRouter()
+const router = useRouter();
 
-const posts = ref<FeedPostView[]>([])
-const wall = ref<CrushWallItem[]>([])
-const loading = ref(true)
-const failed = ref(false)
-const page = ref(0)
-const hasMore = ref(false)
-const loadingMore = ref(false)
+const posts = ref<FeedPostView[]>([]);
+const following = ref(false);
+const favorites = ref<number[]>([]);
+const busyLikes = ref(new Set<number>());
+const busyFollows = ref(new Set<number>());
+let generation = 0;
+const loading = ref(true);
+const failed = ref(false);
+const page = ref(0);
+const hasMore = ref(false);
+const loadingMore = ref(false);
 
-const PAGE_SIZE = 10
-
-onMounted(async () => {
-  // 心动墙单独 catch：它挂了不该把整个广场带下水
-  void feedApi.crushWall().then((r) => (wall.value = r)).catch(() => (wall.value = []))
-  try {
-    const first = await feedApi.square(0, PAGE_SIZE)
-    posts.value = first.items
-    hasMore.value = first.hasMore
-  } catch {
-    failed.value = true
-  } finally {
-    loading.value = false
+const PAGE_SIZE = 10;
+const displayPosts = computed<DisplayFeedPost[]>(() => [
+  ...(failed.value ? [] : posts.value),
+  ...previewFeedPosts.filter(
+    (p) => !following.value || previewFeedFollowing.value.includes(p.talentId),
+  ),
+]);
+function isFollowed(id: number) {
+  return id < 0
+    ? previewFeedFollowing.value.includes(id)
+    : favorites.value.includes(id);
+}
+function openAuthor(post: FeedPostView) {
+  if (getPreviewPost(post.id)) {
+    const talent = previewTalents.find((t) => t.id === post.talentId);
+    void showDialog({
+      title: `${post.nickname} · 模拟主播`,
+      message: `${talent?.region ?? ''} · ${talent?.age ?? ''} 岁\n${talent?.tags.join(' · ') ?? ''}\n仅供浏览展示，不提供真实服务。`,
+    });
+    return;
   }
-})
+  void router.push(talentPath(post.talentId, EntrySource.FEED));
+}
 
-async function loadMore() {
-  if (loadingMore.value || !hasMore.value) return
-  loadingMore.value = true
+onMounted(() => {
+  void reload();
+  void talentApi
+    .myFavorites()
+    .then((items) => (favorites.value = items.map((i) => i.id)))
+    .catch(() => {});
+});
+watch(following, reload);
+async function reload() {
+  const gen = ++generation;
+  loading.value = true;
+  failed.value = false;
+  page.value = 0;
+  loadingMore.value = false;
   try {
-    const next = await feedApi.square(page.value + 1, PAGE_SIZE)
-    page.value += 1
-    posts.value = posts.value.concat(next.items)
-    hasMore.value = next.hasMore
+    const res = await feedApi.square(0, PAGE_SIZE, following.value);
+    if (gen !== generation) return;
+    posts.value = res.items;
+    hasMore.value = res.hasMore;
+  } catch {
+    if (gen === generation) failed.value = true;
   } finally {
-    loadingMore.value = false
+    if (gen === generation) loading.value = false;
+  }
+}
+async function loadMore() {
+  if (loading.value || loadingMore.value || !hasMore.value) return;
+  const gen = generation;
+  loadingMore.value = true;
+  try {
+    const next = await feedApi.square(
+      page.value + 1,
+      PAGE_SIZE,
+      following.value,
+    );
+    if (gen !== generation) return;
+    page.value++;
+    posts.value.push(...next.items);
+    hasMore.value = next.hasMore;
+  } finally {
+    if (gen === generation) loadingMore.value = false;
+  }
+}
+async function follow(id: number) {
+  if (id < 0) {
+    togglePreviewFollow(id);
+    return;
+  }
+  if (busyFollows.value.has(id)) return;
+  busyFollows.value.add(id);
+  try {
+    if (favorites.value.includes(id)) {
+      await talentApi.unfavorite(id);
+      favorites.value = favorites.value.filter((x) => x !== id);
+      if (following.value) void reload();
+    } else {
+      await talentApi.favorite(id);
+      favorites.value.push(id);
+    }
+  } finally {
+    busyFollows.value.delete(id);
   }
 }
 
 /** 计数以服务端返回的为准，前端不自己加减——自己加减迟早和服务端对不上。 */
 async function toggleLike(post: FeedPostView) {
+  if (getPreviewPost(post.id)) {
+    togglePreviewLike(post);
+    return;
+  }
+  if (busyLikes.value.has(post.id)) return;
+  busyLikes.value.add(post.id);
   try {
     const count = post.liked
       ? await feedApi.unlike(post.id)
-      : await feedApi.like(post.id)
-    post.liked = !post.liked
-    post.likeCount = count
+      : await feedApi.like(post.id);
+    post.liked = !post.liked;
+    post.likeCount = count;
   } catch (e) {
-    if (!(e instanceof ApiError)) throw e
+    if (!(e instanceof ApiError)) throw e;
+  } finally {
+    busyLikes.value.delete(post.id);
   }
 }
 
 async function report(post: FeedPostView) {
+  if (getPreviewPost(post.id)) {
+    showToast('这是模拟动态，不会提交真实举报');
+    return;
+  }
   const { value } = await showConfirmDialog({
     title: '举报这条动态',
     message: '请简要说明问题，运营会尽快处理。',
   })
     .then(() => ({ value: '内容不适' }))
-    .catch(() => ({ value: null }))
-  if (value === null) return
+    .catch(() => ({ value: null }));
+  if (value === null) return;
 
   try {
-    await feedApi.reportPost(post.id, value)
-    showToast('已提交，感谢反馈')
+    await feedApi.reportPost(post.id, value);
+    showToast('已提交，感谢反馈');
   } catch (e) {
-    if (!(e instanceof ApiError)) throw e
+    if (!(e instanceof ApiError)) throw e;
   }
 }
 
-/** 心动墙与下面的动态流是两个入口，分别归因。 */
-function openWall(talentId: number) {
-  trackEntry(EntrySource.CRUSH_WALL, talentId)
-  router.push(talentPath(talentId, EntrySource.CRUSH_WALL))
-}
-
 function preview(images: string[], index: number) {
-  showImagePreview({ images, startPosition: index })
-}
-
-function initial(nickname: string | null) {
-  return (nickname ?? '').trim().charAt(0) || '·'
+  showImagePreview({ images, startPosition: index });
 }
 
 function timeText(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 1) return '刚刚'
-  if (min < 60) return `${min} 分钟前`
-  const hour = Math.floor(min / 60)
-  if (hour < 24) return `${hour} 小时前`
-  const day = Math.floor(hour / 24)
-  return day < 30 ? `${day} 天前` : new Date(iso).toLocaleDateString()
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return '刚刚';
+  if (min < 60) return `${min} 分钟前`;
+  const hour = Math.floor(min / 60);
+  if (hour < 24) return `${hour} 小时前`;
+  const day = Math.floor(hour / 24);
+  return day < 30 ? `${day} 天前` : new Date(iso).toLocaleDateString();
 }
 </script>
-
 <template>
-  <div class="page">
-    <NavBar title="动态广场" />
-
-    <!-- 心动墙 -->
-    <section v-if="wall.length" class="wall">
-      <h3 class="wall-title">心动墙</h3>
-      <div class="wall-scroll">
-        <article
-          v-for="w in wall"
-          :key="w.talentId"
-          class="wall-item"
-          @click="openWall(w.talentId)"
-        >
-          <div class="wall-avatar">
-            <img v-if="w.coverUrl" :src="w.coverUrl" alt="" />
-            <span v-else class="fallback">{{ initial(w.nickname) }}</span>
-            <i v-if="w.online" class="dot"></i>
-          </div>
-          <span class="wall-name">{{ w.nickname }}</span>
-          <span v-if="w.promoTags.length" class="wall-tag">{{ w.promoTags[0] }}</span>
-        </article>
-      </div>
-    </section>
-
-    <Skeleton v-if="loading" :row="4" style="padding: 16px" />
-    <EmptyState v-else-if="failed" image="network" description="加载失败" />
-    <EmptyState v-else-if="posts.length === 0" description="还没有动态" />
-
-    <div v-else class="list">
-      <article v-for="p in posts" :key="p.id" class="post">
-        <header class="head" @click="router.push(talentPath(p.talentId, EntrySource.FEED))">
-          <div class="avatar">
-            <img v-if="p.coverUrl" :src="p.coverUrl" alt="" />
-            <span v-else class="fallback">{{ initial(p.nickname) }}</span>
-          </div>
-          <div class="who">
-            <span class="name">{{ p.nickname ?? '主播' }}</span>
-            <span class="time">{{ timeText(p.createdAt) }}</span>
-          </div>
-        </header>
-
-        <p v-if="p.content" class="content">{{ p.content }}</p>
-
-        <div v-if="p.images.length" class="images" :class="`n${Math.min(p.images.length, 3)}`">
-          <img
-            v-for="(img, i) in p.images"
-            :key="img"
-            :src="img"
-            alt=""
-            @click="preview(p.images, i)"
-          />
-        </div>
-
-        <footer class="actions">
-          <button class="act" :class="{ on: p.liked }" @click="toggleLike(p)">
-            ♥ {{ p.likeCount || '赞' }}
-          </button>
-          <button class="act" @click="router.push(`/feed/${p.id}`)">
-            评论 {{ p.commentCount || '' }}
-          </button>
-          <button class="act report" @click="report(p)">举报</button>
-        </footer>
-      </article>
-
-      <button v-if="hasMore" class="more" :disabled="loadingMore" @click="loadMore">
-        <Loading v-if="loadingMore" size="16" />
-        <template v-else>加载更多</template>
+  <div class="square-page">
+    <header class="square-header">
+      <button :class="{ active: !following }" @click="following = false">
+        推荐</button
+      ><button :class="{ active: following }" @click="following = true">
+        关注</button
+      ><span>分享每一个心动瞬间</span>
+    </header>
+    <Skeleton v-if="loading" :row="5" />
+    <div v-else-if="failed" class="empty">
+      <EmptyState description="动态加载失败" /><button
+        class="primary-btn"
+        @click="reload"
+      >
+        重试
       </button>
-      <p v-else class="end">没有更多了</p>
     </div>
-
+    <EmptyState
+      v-else-if="!displayPosts.length"
+      :description="following ? '关注的店员还没有动态' : '还没有动态'"
+    />
+    <article v-for="p in loading ? [] : displayPosts" :key="p.id" class="post">
+      <header>
+        <button class="author" @click="openAuthor(p)">
+          <span class="avatar"
+            ><Portrait :src="p.coverUrl" :seed="p.talentId" round /></span
+          ><b>{{ p.nickname || '店员' }}</b
+          ><small v-if="p.demo" class="demo-badge">模拟动态</small></button
+        ><button
+          class="follow"
+          :class="{ followed: isFollowed(p.talentId) }"
+          :disabled="busyFollows.has(p.talentId)"
+          @click="follow(p.talentId)"
+        >
+          {{ isFollowed(p.talentId) ? '♥ 已关注' : '♡ 关注' }}
+        </button>
+      </header>
+      <p
+        v-if="p.content"
+        class="post-text"
+        @click="router.push(`/feed/${p.id}`)"
+      >
+        {{ p.content }}
+      </p>
+      <div
+        v-if="p.images.length"
+        class="images"
+        :class="{ single: p.images.length === 1 }"
+      >
+        <img
+          v-for="(img, i) in p.images"
+          :key="img"
+          :src="img"
+          alt="动态配图"
+          @click="preview(p.images, i)"
+        />
+      </div>
+      <DemoFeedGallery v-if="p.demoTiles?.length" :tiles="p.demoTiles" />
+      <footer>
+        <time>{{ timeText(p.createdAt) }}</time
+        ><button class="report" @click="report(p)">···</button
+        ><button
+          :class="{ liked: p.liked }"
+          :disabled="busyLikes.has(p.id)"
+          @click="toggleLike(p)"
+        >
+          {{ p.liked ? '♥' : '♡' }} {{ p.likeCount || '赞' }}</button
+        ><button @click="router.push(`/feed/${p.id}`)">
+          ♧ {{ p.commentCount || '评论' }}
+        </button>
+      </footer>
+    </article>
+    <button
+      v-if="hasMore && !loading"
+      class="more"
+      :disabled="loadingMore"
+      @click="loadMore"
+    >
+      <Loading v-if="loadingMore" size="16" /><span v-else>加载更多</span>
+    </button>
+    <p v-else-if="displayPosts.length && !loading" class="end">已经到底啦</p>
     <FanTabBar />
   </div>
 </template>
-
 <style scoped>
-.page {
-  min-height: 100vh;
-  background: var(--g-page);
-  background-attachment: fixed;
-  padding-bottom: 68px;
-}
-
-/* ---------- 心动墙 ---------- */
-.wall {
-  padding: var(--sp-4) 0 var(--sp-2);
-}
-
-.wall-title {
-  margin: 0 var(--sp-4) var(--sp-3);
-  font-size: var(--fs-lg);
-  font-weight: 700;
-}
-
-.wall-scroll {
-  display: flex;
-  gap: var(--sp-3);
-  overflow-x: auto;
-  padding: 0 var(--sp-4) var(--sp-2);
-  scrollbar-width: none;
-}
-
-.wall-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.wall-item {
+.demo-badge {
   flex: none;
-  width: 72px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
+  font-size: 9px;
+  color: #a59bad;
+  border: 1px solid #eee6f1;
+  border-radius: 4px;
+  padding: 2px 4px;
 }
-
-.wall-avatar {
+.square-page {
+  min-height: 100dvh;
+  background: radial-gradient(circle at 0 0, #fff4c8, transparent 45%),
+    radial-gradient(circle at 100% 12%, #d8f6ff, transparent 45%),
+    linear-gradient(#fce8f2, #f7f7f8 500px);
+  padding: 16px 13px
+    calc(var(--fan-tabbar-height) + 20px + env(safe-area-inset-bottom, 0px));
+}
+.square-header {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 13px 5px 22px;
+}
+.square-header button {
   position: relative;
-  width: 60px;
-  height: 60px;
+  border: 0;
+  background: none;
+  padding: 0 0 9px;
+  font-size: 20px;
+  color: #888;
+}
+.square-header button.active {
+  font-weight: 700;
+  font-size: 24px;
+  color: #333;
+}
+.square-header button.active:after {
+  content: '';
+  width: 23px;
+  height: 4px;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
   border-radius: 50%;
-  overflow: visible;
-  background: var(--g-avatar);
+  background: #18c8b5;
+}
+.square-header > span {
+  font-size: 9px;
+  margin-left: auto;
+  color: #b5a9b3;
+}
+.post {
+  padding: 16px;
+  background: #fff;
+  border-radius: 13px;
+  margin-bottom: 12px;
+}
+.post header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 10px;
 }
-
-.wall-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
+.author {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: none;
+  padding: 0;
+  min-width: 0;
 }
-
-.dot {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--c-online);
-  box-shadow: 0 0 0 2px var(--c-surface);
+.avatar {
+  width: 38px;
+  height: 38px;
+  flex: none;
 }
-
-.wall-name,
-.wall-tag {
-  max-width: 100%;
+.author b {
+  font-size: 14px;
+  font-weight: 500;
+  max-width: 170px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.wall-name {
-  font-size: var(--fs-sm);
-  font-weight: 600;
+.follow {
+  border: 1px solid #e4f7f2;
+  background: white;
+  color: #41c3b2;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  white-space: nowrap;
 }
-
-.wall-tag {
-  font-size: 11px;
-  color: var(--c-text-3);
+.follow.followed {
+  background: #effaf7;
+  color: #9dc7be;
 }
-
-/* ---------- 广场 ---------- */
-.list {
-  margin: 0 var(--sp-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-}
-
-.post {
-  background: var(--c-surface);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sd-card);
-  padding: var(--sp-4);
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  cursor: pointer;
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border-radius: 50%;
-  overflow: hidden;
-  background: var(--g-avatar);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.fallback {
-  font-size: var(--fs-md);
-  font-weight: 300;
-  color: #fff;
-}
-
-.who {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.name {
-  font-size: var(--fs-md);
-  font-weight: 600;
-}
-
-.time {
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
-}
-
-.content {
-  margin: var(--sp-3) 0 0;
-  font-size: var(--fs-md);
-  line-height: 1.7;
+.post-text {
+  font-size: 13px;
+  line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-word;
+  margin: 14px 0;
+  color: #666;
+  cursor: pointer;
 }
-
 .images {
   display: grid;
-  gap: 4px;
-  margin-top: var(--sp-3);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 12px;
 }
-
-.images.n1 {
-  grid-template-columns: minmax(0, 60%);
-}
-
-.images.n2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.images.n3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .images img {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: var(--r-md);
+  border-radius: 7px;
   cursor: pointer;
 }
-
-.images.n1 img {
-  aspect-ratio: 4 / 3;
+.images.single {
+  display: block;
 }
-
-.actions {
+.images.single img {
+  width: 70%;
+  max-height: 360px;
+  aspect-ratio: auto;
+  border-radius: 7px;
+}
+.post footer {
   display: flex;
-  gap: var(--sp-4);
-  margin-top: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--c-border);
+  align-items: center;
+  gap: 15px;
+  color: #b6b9bf;
+  padding-top: 14px;
 }
-
-.act {
-  border: none;
+.post time {
+  font-size: 10px;
+  flex: 1;
+}
+.post footer button {
   background: none;
+  border: 0;
+  color: #aaa;
+  font-size: 12px;
   padding: 0;
-  font-size: var(--fs-sm);
-  color: var(--c-text-2);
-  cursor: pointer;
 }
-
-.act.on {
-  color: var(--c-price);
-  font-weight: 600;
+.post footer .liked {
+  color: #f097b9;
 }
-
-.act.report {
-  margin-left: auto;
-  color: var(--c-text-3);
+.post footer .report {
+  font-size: 17px;
 }
-
 .more {
-  width: 100%;
-  border: none;
-  background: var(--c-surface);
-  border-radius: var(--r-lg);
-  padding: var(--sp-3);
-  font-size: var(--fs-md);
-  color: var(--c-text-2);
-  cursor: pointer;
+  display: block;
+  margin: 20px auto;
+  border: 0;
+  color: #aaa;
+  background: none;
+  font-size: 12px;
 }
-
 .end {
-  margin: 0;
-  padding: var(--sp-3);
   text-align: center;
-  font-size: var(--fs-sm);
-  color: var(--c-text-3);
+  color: #b7b9c0;
+  font-size: 10px;
+  margin: 22px 0;
+}
+.empty {
+  text-align: center;
 }
 </style>

@@ -2,6 +2,12 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
   {
+    path: '/wall',
+    name: 'wall',
+    component: () => import('@/views/WallView.vue'),
+    meta: { title: '心动墙' },
+  },
+  {
     path: '/',
     name: 'talent-list',
     component: () => import('@/views/TalentListView.vue'),
@@ -288,4 +294,7 @@ const routes: RouteRecordRaw[] = [
 export const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
 })
+
+router.afterEach(to => { document.title = String(to.meta.title ?? '晚星奶糖') })

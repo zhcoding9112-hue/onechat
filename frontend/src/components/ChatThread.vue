@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
-import LevelBadge from '@/components/LevelBadge.vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton, showToast, showImagePreview } from 'vant'
-import type { ChatConversationView, ChatMessageView, ChatView } from '@/api/chat'
-import { ApiError } from '@/api/http'
+import { nextTick, onMounted, ref } from 'vue';
+import LevelBadge from '@/components/LevelBadge.vue';
+import { useRouter } from 'vue-router';
+import { NavBar, Skeleton, showToast, showImagePreview } from 'vant';
+import type {
+  ChatConversationView,
+  ChatMessageView,
+  ChatView,
+} from '@/api/chat';
+import { ApiError } from '@/api/http';
 
 /**
  * 会话详情。粉丝端与主播端共用。
@@ -14,100 +18,100 @@ import { ApiError } from '@/api/http'
  * 抄两遍的代价是以后只改一边。
  */
 const props = defineProps<{
-  conversationId: number
+  conversationId: number;
   api: {
-    open: (id: number, limit?: number) => Promise<ChatView>
-    sendText: (id: number, content: string) => Promise<ChatMessageView>
-    sendImage: (id: number, url: string) => Promise<ChatMessageView>
-    uploadImage: (file: File) => Promise<string>
-  }
+    open: (id: number, limit?: number) => Promise<ChatView>;
+    sendText: (id: number, content: string) => Promise<ChatMessageView>;
+    sendImage: (id: number, url: string) => Promise<ChatMessageView>;
+    uploadImage: (file: File) => Promise<string>;
+  };
   /** 右上角跳转对方主页的链接；主播端看自己的会话时不需要。 */
-  peerLink?: (c: ChatConversationView) => string | null
-}>()
+  peerLink?: (c: ChatConversationView) => string | null;
+}>();
 
-const emit = defineEmits<{ (e: 'read'): void }>()
+const emit = defineEmits<{ (e: 'read'): void }>();
 
-const router = useRouter()
+const router = useRouter();
 
-const conversation = ref<ChatConversationView | null>(null)
-const messages = ref<ChatMessageView[]>([])
-const draft = ref('')
-const loading = ref(true)
-const failed = ref(false)
-const sending = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
-const scroller = ref<HTMLElement | null>(null)
+const conversation = ref<ChatConversationView | null>(null);
+const messages = ref<ChatMessageView[]>([]);
+const draft = ref('');
+const loading = ref(true);
+const failed = ref(false);
+const sending = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
+const scroller = ref<HTMLElement | null>(null);
 
 onMounted(async () => {
   try {
-    const view = await props.api.open(props.conversationId)
-    conversation.value = view.conversation
-    messages.value = view.messages
+    const view = await props.api.open(props.conversationId);
+    conversation.value = view.conversation;
+    messages.value = view.messages;
     // 打开即已读，导航上的红点要跟着变
-    emit('read')
-    await scrollToEnd()
+    emit('read');
+    await scrollToEnd();
   } catch {
-    failed.value = true
+    failed.value = true;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-})
+});
 
 async function scrollToEnd() {
-  await nextTick()
-  const el = scroller.value
-  if (el) el.scrollTop = el.scrollHeight
+  await nextTick();
+  const el = scroller.value;
+  if (el) el.scrollTop = el.scrollHeight;
 }
 
 async function send() {
-  const text = draft.value.trim()
-  if (!text || sending.value) return
-  sending.value = true
+  const text = draft.value.trim();
+  if (!text || sending.value) return;
+  sending.value = true;
   try {
-    messages.value.push(await props.api.sendText(props.conversationId, text))
-    draft.value = ''
-    await scrollToEnd()
+    messages.value.push(await props.api.sendText(props.conversationId, text));
+    draft.value = '';
+    await scrollToEnd();
   } catch (e) {
-    if (!(e instanceof ApiError)) throw e
+    if (!(e instanceof ApiError)) throw e;
   } finally {
-    sending.value = false
+    sending.value = false;
   }
 }
 
 function pickImage() {
-  fileInput.value?.click()
+  fileInput.value?.click();
 }
 
 async function onPick(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  sending.value = true
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  sending.value = true;
   try {
-    const url = await props.api.uploadImage(file)
-    messages.value.push(await props.api.sendImage(props.conversationId, url))
-    await scrollToEnd()
+    const url = await props.api.uploadImage(file);
+    messages.value.push(await props.api.sendImage(props.conversationId, url));
+    await scrollToEnd();
   } catch (err) {
-    showToast(err instanceof Error ? err.message : '发送失败')
+    showToast(err instanceof Error ? err.message : '发送失败');
   } finally {
-    sending.value = false
+    sending.value = false;
   }
 }
 
 function preview(url: string) {
-  showImagePreview({ images: [url] })
+  showImagePreview({ images: [url] });
 }
 
 function peerUrl() {
-  const c = conversation.value
-  if (!c || !props.peerLink) return null
-  return props.peerLink(c)
+  const c = conversation.value;
+  if (!c || !props.peerLink) return null;
+  return props.peerLink(c);
 }
 
 function timeText(iso: string) {
-  const at = new Date(iso)
-  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+  const at = new Date(iso);
+  return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
 }
 </script>
 
@@ -126,7 +130,9 @@ function timeText(iso: string) {
         </span>
       </template>
       <template #right>
-        <span v-if="peerUrl()" class="nav-link" @click="router.push(peerUrl()!)">主页</span>
+        <span v-if="peerUrl()" class="nav-link" @click="router.push(peerUrl()!)"
+          >主页</span
+        >
       </template>
     </NavBar>
 
@@ -161,12 +167,24 @@ function timeText(iso: string) {
         已下架主播的历史会话只读：输入区整体换成一条说明，而不是留一个灰按钮。
         服务端同样会拒绝发送，前端这里只是别让人白打一段字。
       -->
-      <footer v-if="conversation && !conversation.canSend" class="composer closed">
-        <span data-testid="send-disabled">{{ conversation.disabledReason ?? '暂不可约' }}</span>
+      <footer
+        v-if="conversation && !conversation.canSend"
+        class="composer closed"
+      >
+        <span data-testid="send-disabled">{{
+          conversation.disabledReason ?? '暂不可约'
+        }}</span>
       </footer>
 
       <footer v-else class="composer">
-        <button class="plus" :disabled="sending" aria-label="发图片" @click="pickImage">＋</button>
+        <button
+          class="plus"
+          :disabled="sending"
+          aria-label="发图片"
+          @click="pickImage"
+        >
+          ＋
+        </button>
         <input
           ref="fileInput"
           type="file"
@@ -182,7 +200,9 @@ function timeText(iso: string) {
           maxlength="1000"
           @keyup.enter="send"
         />
-        <button class="send" :disabled="sending || !draft.trim()" @click="send">发送</button>
+        <button class="send" :disabled="sending || !draft.trim()" @click="send">
+          发送
+        </button>
       </footer>
     </template>
   </div>
@@ -337,5 +357,21 @@ function timeText(iso: string) {
 .send:disabled,
 .plus:disabled {
   opacity: 0.5;
+}
+.page {
+  background: #f5f5f5;
+}
+.composer {
+  max-width: var(--app-max-width);
+  width: 100%;
+}
+.composer input {
+  background: #ededed;
+  border: 0;
+  border-radius: 20px;
+}
+.composer .send {
+  background: #a875db;
+  border-radius: 20px;
 }
 </style>

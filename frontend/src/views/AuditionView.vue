@@ -1,105 +1,128 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { NavBar, Skeleton, showToast, showConfirmDialog } from 'vant'
-import AudioPreview from '@/components/AudioPreview.vue'
-import { talentApi, type TalentCard } from '@/api/talent'
+import Portrait from '@/components/Portrait.vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import {
+  NavBar,
+  Skeleton,
+  showToast,
+  showConfirmDialog,
+  showDialog,
+} from 'vant';
+import AudioPreview from '@/components/AudioPreview.vue';
+import { talentApi, type TalentCard } from '@/api/talent';
 import {
   auditionApi,
   type AuditionReplyView,
   type AuditionRequestView,
-} from '@/api/audition'
-import { ApiError } from '@/api/http'
-import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics'
-import EmptyState from '@/components/EmptyState.vue'
+} from '@/api/audition';
+import { ApiError } from '@/api/http';
+import { EntrySource, ENTRY_QUERY, talentPath } from '@/api/analytics';
+import EmptyState from '@/components/EmptyState.vue';
 
-const router = useRouter()
+import { previewTalents } from '@/preview/marketplace';
 
-const tab = ref<'voices' | 'request'>('voices')
+const router = useRouter();
 
-const voices = ref<TalentCard[]>([])
-const voicesLoading = ref(true)
-const voicesFailed = ref(false)
+const tab = ref<'voices' | 'request'>('voices');
 
-const myRequest = ref<AuditionRequestView | null>(null)
-const replies = ref<AuditionReplyView[]>([])
-const requestLoading = ref(true)
-const desc = ref('')
-const publishing = ref(false)
+const voices = ref<TalentCard[]>([]);
+const voicesLoading = ref(true);
+const voicesFailed = ref(false);
+const displayVoices = computed(() => [...voices.value, ...previewTalents]);
+function openVoice(t: TalentCard) {
+  if (t.id < 0) {
+    void showDialog({
+      title: t.nickname + ' · 模拟主播',
+      message:
+        '这是一段合成示例语音，可以点击播放试听。模拟主播不提供真实服务。',
+    });
+    return;
+  }
+  void router.push(talentPath(t.id, EntrySource.AUDITION));
+}
+
+const myRequest = ref<AuditionRequestView | null>(null);
+const replies = ref<AuditionReplyView[]>([]);
+const requestLoading = ref(true);
+const desc = ref('');
+const publishing = ref(false);
 
 onMounted(async () => {
-  void loadVoices()
-  void loadRequest()
-})
+  void loadVoices();
+  void loadRequest();
+});
 
 async function loadVoices() {
-  voicesLoading.value = true
-  voicesFailed.value = false
+  voicesLoading.value = true;
+  voicesFailed.value = false;
   try {
-    voices.value = await talentApi.voices()
+    voices.value = await talentApi.voices();
   } catch {
-    voicesFailed.value = true
+    voicesFailed.value = true;
   } finally {
-    voicesLoading.value = false
+    voicesLoading.value = false;
   }
 }
 
 async function loadRequest() {
-  requestLoading.value = true
+  requestLoading.value = true;
   try {
-    myRequest.value = await auditionApi.mine()
-    replies.value = myRequest.value ? await auditionApi.replies(myRequest.value.id) : []
+    myRequest.value = await auditionApi.mine();
+    replies.value = myRequest.value
+      ? await auditionApi.replies(myRequest.value.id)
+      : [];
   } catch {
-    myRequest.value = null
-    replies.value = []
+    myRequest.value = null;
+    replies.value = [];
   } finally {
-    requestLoading.value = false
+    requestLoading.value = false;
   }
 }
 
 async function publish() {
   if (!desc.value.trim()) {
-    showToast('说说你想要什么样的声音')
-    return
+    showToast('说说你想要什么样的声音');
+    return;
   }
-  publishing.value = true
+  publishing.value = true;
   try {
-    await auditionApi.publish(desc.value.trim())
-    desc.value = ''
-    showToast('已发布，等主播应征')
-    await loadRequest()
+    await auditionApi.publish(desc.value.trim());
+    desc.value = '';
+    showToast('已发布，等主播应征');
+    await loadRequest();
   } catch (e) {
     // 「已有进行中的需求」这类业务拒绝，把后端原话透出来
     if (e instanceof ApiError) {
-      showToast(e.message)
+      showToast(e.message);
     } else {
-      throw e
+      throw e;
     }
   } finally {
-    publishing.value = false
+    publishing.value = false;
   }
 }
 
 async function close() {
-  if (!myRequest.value) return
+  if (!myRequest.value) return;
   await showConfirmDialog({
     title: '关闭试音需求',
     message: '关闭后主播不能再应征，已有的应征记录仍可查看。',
-  })
-  await auditionApi.close(myRequest.value.id)
-  showToast('已关闭')
-  await loadRequest()
+  });
+  await auditionApi.close(myRequest.value.id);
+  showToast('已关闭');
+  await loadRequest();
 }
 
-function initial(nickname: string) {
-  return nickname.trim().charAt(0) || '·'
+function initial(nickname: string | null) {
+  return nickname?.trim().charAt(0) || '·';
 }
 
 function expiresText(iso: string) {
-  const left = new Date(iso).getTime() - Date.now()
-  if (left <= 0) return '已过期'
-  const hours = Math.floor(left / 3600000)
-  return hours >= 1 ? `${hours} 小时后关闭` : '不到 1 小时后关闭'
+  const left = new Date(iso).getTime() - Date.now();
+  if (left <= 0) return '已过期';
+  const hours = Math.floor(left / 3600000);
+  return hours >= 1 ? `${hours} 小时后关闭` : '不到 1 小时后关闭';
 }
 </script>
 
@@ -108,9 +131,13 @@ function expiresText(iso: string) {
     <NavBar title="试音选人" left-arrow @click-left="$router.back()" />
 
     <div class="tabs">
-      <button :class="{ on: tab === 'voices' }" @click="tab = 'voices'">听声音挑人</button>
+      <button :class="{ on: tab === 'voices' }" @click="tab = 'voices'">
+        听声音挑人
+      </button>
       <button :class="{ on: tab === 'request' }" @click="tab = 'request'">
-        发布试音需求<i v-if="replies.length" class="badge">{{ replies.length }}</i>
+        发布试音需求<i v-if="replies.length" class="badge">{{
+          replies.length
+        }}</i>
       </button>
     </div>
 
@@ -119,24 +146,36 @@ function expiresText(iso: string) {
       <div v-if="voicesLoading" class="list">
         <Skeleton v-for="i in 3" :key="i" avatar :row="1" class="skeleton" />
       </div>
-      <EmptyState v-else-if="voicesFailed" image="network" description="加载失败" />
-      <EmptyState v-else-if="voices.length === 0" description="还没有主播上传试听片段" />
+      <EmptyState
+        v-else-if="voicesFailed"
+        image="network"
+        description="加载失败"
+      />
+      <EmptyState
+        v-else-if="displayVoices.length === 0"
+        description="还没有主播上传试听片段"
+      />
       <div v-else class="list">
         <article
-          v-for="t in voices"
+          v-for="t in displayVoices"
           :key="t.id"
           class="voice"
-          @click="router.push(talentPath(t.id, EntrySource.AUDITION))"
+          @click="openVoice(t)"
         >
           <div class="avatar">
-            <img v-if="t.coverUrl" :src="t.coverUrl" alt="" />
-            <span v-else class="fallback">{{ initial(t.nickname) }}</span>
+            <Portrait :src="t.coverUrl" :seed="t.id" round />
           </div>
           <div class="who">
             <span class="name">{{ t.nickname }}</span>
-            <span v-if="t.promoTags.length" class="note">{{ t.promoTags[0] }}</span>
+            <span v-if="t.promoTags.length" class="note">{{
+              t.promoTags[0]
+            }}</span>
           </div>
-          <AudioPreview v-if="t.audioUrl" :url="t.audioUrl" :seconds="t.audioSeconds" />
+          <AudioPreview
+            v-if="t.audioUrl"
+            :url="t.audioUrl"
+            :seconds="t.audioSeconds"
+          />
         </article>
       </div>
     </template>
@@ -156,7 +195,10 @@ function expiresText(iso: string) {
         </section>
 
         <h3 class="sec-title">应征的主播（{{ replies.length }}）</h3>
-        <EmptyState v-if="replies.length === 0" description="还没有主播应征，再等等" />
+        <EmptyState
+          v-if="replies.length === 0"
+          description="还没有主播应征，再等等"
+        />
         <div v-else class="list">
           <article v-for="r in replies" :key="r.replyId" class="reply">
             <div class="avatar">
@@ -169,9 +211,20 @@ function expiresText(iso: string) {
                 <span v-if="r.online" class="online">在线</span>
               </div>
               <p v-if="r.message" class="msg">{{ r.message }}</p>
-              <AudioPreview v-if="r.audioUrl" :url="r.audioUrl" :seconds="r.audioSeconds" />
+              <AudioPreview
+                v-if="r.audioUrl"
+                :url="r.audioUrl"
+                :seconds="r.audioSeconds"
+              />
             </div>
-            <button class="order" @click.stop="router.push(`/talents/${r.talentId}/order?${ENTRY_QUERY}=${EntrySource.AUDITION}`)">
+            <button
+              class="order"
+              @click.stop="
+                router.push(
+                  `/talents/${r.talentId}/order?${ENTRY_QUERY}=${EntrySource.AUDITION}`,
+                )
+              "
+            >
               下单
             </button>
           </article>
@@ -179,7 +232,9 @@ function expiresText(iso: string) {
       </template>
 
       <section v-else class="publish">
-        <p class="hint">描述你想要的声音，主播看到后会带着自己的试听片段来应征。</p>
+        <p class="hint">
+          描述你想要的声音，主播看到后会带着自己的试听片段来应征。
+        </p>
         <textarea
           v-model="desc"
           maxlength="200"
