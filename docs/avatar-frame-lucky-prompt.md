@@ -1,0 +1,9 @@
+# 好运蝴蝶结素材生成记录
+
+使用内置 image_gen 工具（imagegen 技能），参考用户提供的粉色蝴蝶结、许愿瓶、金币云朵头像框截图生成透明装饰素材；没有使用 CLI/API 回退。
+
+项目资产：`frontend/public/images/lucky-bow-frame.png`。这是生成的静态透明素材，网页中的蝴蝶结、许愿瓶、金币云朵分层动画由 CSS 实现，不是竞品原始动画。移除参考里的人物、音频按钮、文字及卡片背景。
+
+## 最终提示词
+
+Use case: style-transfer / transparent UI asset. Transform the attached reference screenshot into one standalone high-quality avatar decoration frame. Keep the elaborate cute dimensional aesthetic and composition: glossy candy-pink oversized bow at top center with a gold five-point star jewel; translucent pastel pink-lavender-cyan circular ribbon ring; small iridescent ribbon flourishes; a little pink glass wishing jar hanging at left; a plush lavender-and-cream cloud supporting shiny gold coins and coin stacks at lower right; a few floating gold coins and tiny star sparkles near the outside. Render as richly shaded polished 3D toy-like mobile social app reward art, sculpted surfaces, pearlescent gradients, glints, detailed beveled gold edges, not flat SVG icons and not line art. Remove the person/photo completely, remove all UI, audio play badge, white card/background and all text including Chinese letters and numbers. Center must be an empty genuinely transparent circular opening for a portrait. Outer background also genuinely transparent. Square canvas 1024x1024. Ring centered at (512,512), outer diameter about 830px and inner transparent hole diameter about 660px; all decorations contained inside image with 35px transparent margin. Top bow mostly in y=40..285 x=300..720, left jar in x=40..240 y=350..640, coin cloud in x=615..975 y=690..970, so these ornaments can be animated as separate regions without slicing across other ornaments. Keep the center clean and large enough to see a face, rich and ornate around perimeter, no face, no person, no watermark, no text, no mockup, no fake checkerboard.

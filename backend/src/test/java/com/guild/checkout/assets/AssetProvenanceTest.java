@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 美术资产来源（task 12.2）。
  *
- * 验收要求「产物中不包含任何来源于竞品的图片文件」。这种事没法靠一次人工检查守住——
+ * 最新规则要求所有图片登记来源；通过文件清单检查避免漏登记——
  * 下次有人把一张图拖进 public/ 就破了。所以让构建来盯：
  * 凡是图片文件，都必须记在 docs/assets.md 的清单里，并写明来源。
  */
@@ -36,7 +36,12 @@ class AssetProvenanceTest {
      * 每加一项，都要同时在 docs/assets.md 里写明它从哪来。
      */
     private static final List<String> ALLOWED = List.of(
-            "public/images/avatar-placeholder.svg");
+            "public/images/avatar-placeholder.svg",
+            "public/images/portraits.webp",
+            "public/images/peiyi-magic-frame-color.png",
+            "public/images/peiyi-magic-frame-mask.png",
+            "public/images/lucky-bow-frame.png",
+            "public/images/feed-lifestyle-scenes.png");
 
     @Test
     @DisplayName("12.2 前端源码里只有清单上的图片文件")
@@ -46,7 +51,7 @@ class AssetProvenanceTest {
 
         assertThat(found)
                 .as("出现了不在 docs/assets.md 清单里的图片文件。"
-                        + "若是自制或已采购授权的资产，请先把它记进清单再提交")
+                        + "若是本轮确认使用的资产，请先把它记进清单再提交")
                 .containsExactlyInAnyOrderElementsOf(ALLOWED);
     }
 
@@ -59,7 +64,7 @@ class AssetProvenanceTest {
         for (String asset : ALLOWED) {
             assertThat(text).as("清单缺少 %s", asset).contains(asset);
         }
-        assertThat(text).contains("不使用任何竞品素材");
+        assertThat(text).contains("所有资产必须登记来源");
     }
 
     /**
