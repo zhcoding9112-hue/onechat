@@ -1,5 +1,7 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig, type ProxyOptions } from 'vite'
+import { defineConfig, type Plugin, type ProxyOptions } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
@@ -67,9 +69,72 @@ const fakeWechatUserAgent: NonNullable<ProxyOptions['configure']> = (proxy) => {
   })
 }
 
+/**
+ * 开发期把 demo-assets/ 当作静态目录挂上，URL 与原来放在 public/ 时一模一样。
+ *
+ * 这些文件（模拟主播的合成语音、模拟动态配图、装饰头像框）只服务于开发预览。
+ * 放在 public/ 下时会被原样拷进 dist——public/ 不参与摇树，演示代码被摇掉了，
+ * 8.5 MB 的素材照样进生产包、发布到服务器，而线上没有任何页面会请求它们。
+ *
+ * 所以把它们挪出 public/，改由这个插件在 vite dev 时提供。`apply: 'serve'`
+ * 保证它在 build 时根本不存在，生产产物里不可能再出现这些文件。
+ *
+ * 支持 Range 请求：Safari / iOS 的微信 WebView 对媒体一律先发 Range，
+ * 只回 200 全量会导致音频拒播。
+ */
+function demoAssets(): Plugin {
+  const root = fileURLToPath(new URL('./demo-assets', import.meta.url))
+  const types: Record<string, string> = {
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.jpg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.mp3': 'audio/mpeg',
+  }
+
+  return {
+    name: 'demo-assets',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const urlPath = decodeURIComponent((req.url ?? '').split('?')[0])
+        const file = path.resolve(root, '.' + path.posix.normalize(urlPath))
+        // 必须落在 demo-assets 里面：normalize 之后再比一次，挡住 ../ 穿越
+        if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+          return next()
+        }
+
+        const size = fs.statSync(file).size
+        const type = types[path.extname(file).toLowerCase()] ?? 'application/octet-stream'
+        res.setHeader('Content-Type', type)
+        res.setHeader('Accept-Ranges', 'bytes')
+
+        const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '')
+        if (range) {
+          const start = range[1] ? Number(range[1]) : 0
+          const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
+          if (start >= size || end < start) {
+            res.statusCode = 416
+            res.setHeader('Content-Range', `bytes */${size}`)
+            return res.end()
+          }
+          res.statusCode = 206
+          res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
+          res.setHeader('Content-Length', String(end - start + 1))
+          return fs.createReadStream(file, { start, end }).pipe(res)
+        }
+
+        res.setHeader('Content-Length', String(size))
+        fs.createReadStream(file).pipe(res)
+      })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     stripRemoteIconFont(),
+    demoAssets(),
     vue(),
     // Element Plus 按需引入：只打包实际用到的组件与样式，
     // 并随 /admin 路由进入异步分块，不污染粉丝端主包。

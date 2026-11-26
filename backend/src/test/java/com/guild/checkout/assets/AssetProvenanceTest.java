@@ -38,16 +38,20 @@ class AssetProvenanceTest {
     private static final List<String> ALLOWED = List.of(
             "public/images/avatar-placeholder.svg",
             "public/images/portraits.webp",
-            "public/images/peiyi-magic-frame-color.png",
-            "public/images/peiyi-magic-frame-mask.png",
-            "public/images/lucky-bow-frame.png",
-            "public/images/feed-lifestyle-scenes.png");
+            // 以下只服务开发预览，放在 demo-assets/ 而不是 public/：
+            // public/ 下的文件会被原样拷进 dist，演示代码摇掉了素材照样进生产包。
+            "demo-assets/images/peiyi-magic-frame-color.png",
+            "demo-assets/images/peiyi-magic-frame-mask.png",
+            "demo-assets/images/lucky-bow-frame.png",
+            "demo-assets/images/feed-lifestyle-scenes.png");
 
     @Test
     @DisplayName("12.2 前端源码里只有清单上的图片文件")
     void 源码里没有计划外的图片() throws IOException {
         List<String> found = imageFilesUnder(FRONTEND.resolve("public"));
         found.addAll(imageFilesUnder(FRONTEND.resolve("src")));
+        // demo-assets 也要扫：素材挪出 public/ 之后，不扫这里等于把登记制度留了个后门
+        found.addAll(imageFilesUnder(FRONTEND.resolve("demo-assets")));
 
         assertThat(found)
                 .as("出现了不在 docs/assets.md 清单里的图片文件。"
@@ -116,7 +120,7 @@ class AssetProvenanceTest {
      * 后端的单测不该强制要求先构建前端。源码那条断言才是常态防线。
      */
     @Test
-    @DisplayName("12.2 构建产物里也只有清单上的图片文件")
+    @DisplayName("12.2 构建产物里只有 public/ 的图片，演示素材一张都不能进")
     void 产物里没有计划外的图片() throws IOException {
         Path dist = FRONTEND.resolve("dist");
         if (!Files.isDirectory(dist)) {
@@ -125,10 +129,15 @@ class AssetProvenanceTest {
         List<String> found = imageFilesUnder(dist).stream()
                 .map(p -> p.substring("dist/".length()))
                 .toList();
+        // 只有 public/ 下的会被拷进 dist。demo-assets/ 下的由开发期插件提供，
+        // 进了产物就说明有人把它挪回 public/ 了——那 8.5 MB 会跟着发到线上。
         List<String> expected = ALLOWED.stream()
+                .filter(p -> p.startsWith("public/"))
                 .map(p -> p.substring("public/".length()))
                 .toList();
-        assertThat(found).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(found)
+                .as("产物里出现了不该有的图片；演示素材属于 demo-assets/，不能放回 public/")
+                .containsExactlyInAnyOrderElementsOf(expected);
     }
 
     /** 产物里不该引用我们不控制的外部域名上的资源。 */

@@ -89,23 +89,43 @@ Vant 的 `Empty` 组件自带一套插画。它是 Vant 自己的美术资产（
 
 ### 2026-11-23 紫色装饰头像框参考
 
-- `public/images/peiyi-magic-frame-color.png`：从用户打开的“陪一”竞品页面打印参考 PDF 第 2 页提取的 200×200 装饰框色彩图；来源文件为 `/Users/richard/Downloads/peiyi-reference-20261123.pdf`，提取对象 image-020。用户已允许复用竞品素材。图中不包含主播照片。
-- `public/images/peiyi-magic-frame-mask.png`：同一图片的灰度透明蒙版，提取对象 image-021；由 CSS `mask-mode: luminance` 恢复透明区域。
+- `demo-assets/images/peiyi-magic-frame-color.png`：从用户打开的“陪一”竞品页面打印参考 PDF 第 2 页提取的 200×200 装饰框色彩图；来源文件为 `/Users/richard/Downloads/peiyi-reference-20261123.pdf`，提取对象 image-020。用户已允许复用竞品素材。图中不包含主播照片。
+- `demo-assets/images/peiyi-magic-frame-mask.png`：同一图片的灰度透明蒙版，提取对象 image-021；由 CSS `mask-mode: luminance` 恢复透明区域。
 - `TalentPortrait.vue` 使用上述原始静帧。星光闪烁及幽灵、南瓜挂件浮动是参照实时页面自行实现的 CSS 动画，并非提取到的竞品原始动画。人气横栏使用普通头像，推荐区只有指定模拟主播显示装饰框。
 - 新增 14 位开发预览模拟主播与 3 张演示横幅，头像沿用已登记的 `portraits.webp`。模拟资料明确标注，不写入数据库、不提供下单支付与聊天入口，生产构建关闭。
 
 ### 2026-11-23 好运蝴蝶结立体头像框
 
-- `public/images/lucky-bow-frame.png`：使用内置 image_gen 工具（imagegen 技能）依据用户提供的粉色蝴蝶结、金星、许愿瓶、金币云朵参考图重绘的透明装饰素材，1254×1254 RGBA，中心及外围透明。生成输出来源：`/Users/richard/.codex/generated_images/01a20315-8669-7d30-a181-3dd384aca470/exec-d1140c72-1550-46a6-9478-6832721050d4.png`。没有使用 CLI/API 回退。
+- `demo-assets/images/lucky-bow-frame.png`：使用内置 image_gen 工具（imagegen 技能）依据用户提供的粉色蝴蝶结、金星、许愿瓶、金币云朵参考图重绘的透明装饰素材，1254×1254 RGBA，中心及外围透明。生成输出来源：`/Users/richard/.codex/generated_images/01a20315-8669-7d30-a181-3dd384aca470/exec-d1140c72-1550-46a6-9478-6832721050d4.png`。没有使用 CLI/API 回退。
 - 完整提示词及参考处理方式见 [avatar-frame-lucky-prompt.md](avatar-frame-lucky-prompt.md)。移除了参考中的人物、文字、音频按钮和页面背景；生成素材不含真人肖像。
 - `LuckyAvatarFrame.vue` 通过 CSS 将静态素材的蝴蝶结、许愿瓶、金币云朵分区摆动并补充星光；不是竞品原始动画。用户否定的四套简笔 SVG 框已撤掉，当前使用新框、原魔法框和普通头像搭配。
 
 ### 2026-11-23 模拟动态配图
 
-- `public/images/feed-lifestyle-scenes.png`：内置 image_gen 生成的 1536×1024 六格生活照片，包含咖啡、公园、鲜花、甜点、雨天读书、河畔晚霞；由 `DemoFeedGallery.vue` 使用 CSS 定位逐格展示，支持放大。生成输出为 `exec-27f32a21-5a68-4f78-8a0e-990dfd52aaa9.png`，完整提示词见 [feed-scenes-prompt.md](feed-scenes-prompt.md)。未使用 CLI/API 回退。
+- `demo-assets/images/feed-lifestyle-scenes.png`：内置 image_gen 生成的 1536×1024 六格生活照片，包含咖啡、公园、鲜花、甜点、雨天读书、河畔晚霞；由 `DemoFeedGallery.vue` 使用 CSS 定位逐格展示，支持放大。生成输出为 `exec-27f32a21-5a68-4f78-8a0e-990dfd52aaa9.png`，完整提示词见 [feed-scenes-prompt.md](feed-scenes-prompt.md)。未使用 CLI/API 回退。
 - 24 条模拟动态均明确标注；内容与配图不代表主播真实生活，互动仅保存在当前页面会话。
 
 ### 2026-11-23 主播合成示例语音
 
-- `frontend/public/audio/demo/*.mp3`：通过 AI Voice Generator 的标准公开音色生成，未克隆任何真实主播声音。为当前 16 位展示主播分别编写中文自我介绍，完整文案、音色、生成来源、字节数、实际时长见 [demo-voices.json](demo-voices.json)。每段源文件约 16.6–18.3 秒，播放器四舍五入显示。
+- `frontend/demo-assets/audio/demo/*.mp3`：通过 AI Voice Generator 的标准公开音色生成，未克隆任何真实主播声音。为当前 16 位展示主播分别编写中文自我介绍，完整文案、音色、生成来源、字节数、实际时长见 [demo-voices.json](demo-voices.json)。每段源文件约 16.6–18.3 秒，播放器四舍五入显示。
 - 文件保存在项目内并由同源地址加载，不依赖生成工具的临时播放链接。仅开发视觉演示启用替换；列表、详情、盲盒结果与试音页使用相同对应关系。正式上传资料和数据库字段不变，按钮标为“合成”。
+
+## 2026-11-26：演示素材挪出 public/
+
+`public/` 下的文件会被 Vite **原样拷进 `dist/`，不参与摇树**。演示代码靠
+`import.meta.env.DEV` 摇掉了，素材却照样进生产包：挪之前 `dist/` 是 12 MB，
+其中 5.0 MB 音频、5.4 MB 图片，而线上没有任何页面会请求它们。
+
+所以只服务开发预览的素材改放 `frontend/demo-assets/`，由 `vite.config.ts` 里的
+`demoAssets()` 插件在开发期挂成静态目录，URL 与原来一致（`/images/*`、`/audio/demo/*`），
+组件一行没改。该插件 `apply: 'serve'`，**build 时根本不存在**，生产产物里不可能再出现这些文件。
+
+挪完实测 `dist/` 从 12 MB 降到 2.3 MB；开发期四个 URL 全部 200，
+mp3 的 Range 请求回 206（Safari 与微信 WebView 对媒体一律先发 Range，只回 200 会拒播）；
+`/images/../../package.json` 这类穿越被挡掉，落回 SPA 兜底页。
+
+留在 `public/` 的只有两个，它们是生产要用的：`avatar-placeholder.svg`、
+`portraits.webp`（真实封面缺失或加载失败时的占位头像）。
+
+`AssetProvenanceTest` 的扫描范围同步加上了 `demo-assets/`——
+素材挪出去却不扫，等于给登记制度留个后门。
